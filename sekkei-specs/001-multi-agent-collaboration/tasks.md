@@ -283,19 +283,22 @@ description: "Work package task list for multi-agent collaboration CLI"
 
 **Independent Test**: Each command executes with various flag combinations, produces correct output formats (table/json/csv), returns appropriate exit codes, help text generated automatically.
 
-**Prompt**: `tasks/for_review/WP08-cli-commands.md`
+**Prompt**: `tasks/planned/WP08-cli-commands.md`
+
+**Status**: Needs Changes - Missing integration tests (returned from review 2025-11-23)
 
 ### Included Subtasks
-- [X] T042: Implement cmd/collab/main.go (Cobra root command setup, global flags: --verbose, --no-color, --config, --workspace) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/for_review/WP08-cli-commands.md]
-- [X] T043: Implement cli/run.go (parse template, validate, create session, start orchestrator headless or with TUI) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/for_review/WP08-cli-commands.md]
-- [X] T044: Implement cli/resume.go (load session state, validate status=paused, resume orchestrator) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/for_review/WP08-cli-commands.md]
-- [X] T045: Implement cli/list.go (scan workspace for session_state.json, filter by status, format as table/json/csv) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/for_review/WP08-cli-commands.md]
-- [X] T046: Implement cli/show.go (load session, display summary, optional --messages, --deliverable, --logs, --context flags) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/for_review/WP08-cli-commands.md]
-- [X] T047: Implement cli/validate.go (parse template, run validator, display checkmarks or error messages) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/for_review/WP08-cli-commands.md]
-- [X] T048: Implement cli/init.go (interactive wizard for template creation, example template copying) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/for_review/WP08-cli-commands.md]
-- [X] T049: Implement cli/clean.go (filter sessions by age/status, confirm before deletion unless --force) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/for_review/WP08-cli-commands.md]
-- [X] T050: Implement cli/version.go (display version, Go version, build date, commit hash using ldflags) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/for_review/WP08-cli-commands.md]
-- [X] T051: Implement cli/watch.go (attach TUI to running session or replay completed session) [depends on WP09] ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/for_review/WP08-cli-commands.md]
+- [X] T042: Implement cmd/collab/main.go (Cobra root command setup, global flags: --verbose, --no-color, --config, --workspace) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
+- [X] T043: Implement cli/run.go (parse template, validate, create session, start orchestrator headless or with TUI) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
+- [X] T044: Implement cli/resume.go (load session state, validate status=paused, resume orchestrator) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
+- [X] T045: Implement cli/list.go (scan workspace for session_state.json, filter by status, format as table/json/csv) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
+- [X] T046: Implement cli/show.go (load session, display summary, optional --messages, --deliverable, --logs, --context flags) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
+- [X] T047: Implement cli/validate.go (parse template, run validator, display checkmarks or error messages) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
+- [X] T048: Implement cli/init.go (interactive wizard for template creation, example template copying) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
+- [X] T049: Implement cli/clean.go (filter sessions by age/status, confirm before deletion unless --force) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
+- [X] T050: Implement cli/version.go (display version, Go version, build date, commit hash using ldflags) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
+- [X] T051: Implement cli/watch.go (attach TUI to running session or replay completed session) [depends on WP09] ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
+- [ ] T052: Add integration tests for all CLI commands (required by Definition of Done) ⚠️ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
 
 ### Implementation Notes
 1. Exit codes per contract: 0 (success), 1 (incomplete), 2 (error), 3 (validation), 130 (user interrupt)
