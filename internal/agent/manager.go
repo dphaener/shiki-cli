@@ -3,9 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/darinhaener/collab/internal/events"
@@ -49,8 +47,14 @@ func (m *Manager) SpawnAgent(ctx context.Context, cfg *types.Agent, mcpEndpoint 
 	// Create agent instance
 	agent := NewAgent(cfg)
 
-	// Start agent process
-	if err := agent.Start(ctx, mcpEndpoint, m.apiKey); err != nil {
+	// Parse MCP endpoint to extract command and args
+	// For now, assume mcpEndpoint is in format "command args..."
+	// TODO: Properly parse STDIO endpoint format
+	mcpCmd := "collab-mcp-server" // This should be the actual MCP server binary
+	mcpArgs := []string{}         // Any args for the MCP server
+
+	// Start agent process with SDK
+	if err := agent.Start(ctx, mcpCmd, mcpArgs, m.apiKey); err != nil {
 		return nil, fmt.Errorf("failed to start agent %s: %w", cfg.ID, err)
 	}
 
@@ -77,42 +81,97 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 		return nil, fmt.Errorf("agent %s is not healthy", agentID)
 	}
 
+	client := agent.GetClient()
+	if client == nil {
+		return nil, fmt.Errorf("agent %s SDK client not initialized", agentID)
+	}
+
 	// Create timeout context (5 minute default)
 	turnCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
 	start := time.Now()
 
-	// TODO: Implement actual SDK communication
-	// For now, this is a placeholder that simulates agent execution
-	// In production, this would use the claude-agent-sdk-go client
-
-	// Simulate agent thinking time
-	select {
-	case <-turnCtx.Done():
-		return nil, fmt.Errorf("turn timeout exceeded")
-	case <-time.After(100 * time.Millisecond):
-		// Simulated completion
+	// Send query to agent via SDK
+	if err := client.Query(turnCtx, query); err != nil {
+		return nil, fmt.Errorf("failed to send query to agent: %w", err)
 	}
 
+	// Receive and collect response messages
+	msgChan, errChan := client.ReceiveMessages(turnCtx)
+
+	var totalInputTokens, totalOutputTokens, toolCalls int
+	var responseText string
+	var lastError error
+
+	for {
+		select {
+		case <-turnCtx.Done():
+			if lastError != nil {
+				return nil, fmt.Errorf("turn timeout or cancelled: %w", lastError)
+			}
+			return nil, fmt.Errorf("turn timeout exceeded")
+
+		case err := <-errChan:
+			if err != nil {
+				lastError = err
+				// Continue to drain messages
+			}
+
+		case msg := <-msgChan:
+			if msg == nil {
+				// Query completed
+				goto done
+			}
+
+			// Handle different message types to collect metrics
+			// This is a simplified version - full implementation would handle all message types
+			switch msg.Type() {
+			case "text_delta", "text":
+				// Accumulate response text (simplified)
+				responseText += fmt.Sprintf("%v", msg)
+			}
+
+			// TODO: Extract token usage from SDK messages
+			// The SDK should provide usage info in result messages
+			// For now, we'll use estimates
+		}
+	}
+
+done:
 	duration := time.Since(start)
 
-	// Collect metrics (placeholder values)
-	result := &TurnResult{
-		AgentID:    agentID,
-		TurnNumber: turnNumber,
-		Duration:   duration,
-		TokensUsed: 1000, // TODO: Get from SDK
-		Cost:       0.0,  // Will be calculated
-		Response:   fmt.Sprintf("Agent %s response to: %s", agentID, query),
-		ToolCalls:  0,
-		Success:    true,
+	// Estimate token usage (this should come from SDK result messages)
+	totalTokens := totalInputTokens + totalOutputTokens
+	if totalTokens == 0 {
+		// Fallback estimate if SDK doesn't provide usage
+		totalTokens = len(query)/4 + len(responseText)/4
+		totalInputTokens = len(query) / 4
+		totalOutputTokens = len(responseText) / 4
 	}
 
-	// Calculate cost
-	result.Cost = CalculateCost(result.TokensUsed, agent.Model)
+	// Calculate cost using detailed breakdown
+	cost := CalculateCostDetailed(totalInputTokens, totalOutputTokens, agent.Model)
 
-	return result, nil
+	result := &TurnResult{
+		AgentID:      agentID,
+		TurnNumber:   turnNumber,
+		Duration:     duration,
+		TokensUsed:   totalTokens,
+		InputTokens:  totalInputTokens,
+		OutputTokens: totalOutputTokens,
+		Cost:         cost,
+		Response:     responseText,
+		ToolCalls:    toolCalls,
+		Success:      lastError == nil,
+		Error:        "",
+	}
+
+	if lastError != nil {
+		result.Error = lastError.Error()
+	}
+
+	return result, lastError
 }
 
 // startHealthMonitoring begins periodic health checks for an agent
@@ -138,18 +197,19 @@ func (m *Manager) monitorHealth(ctx context.Context, agent *Agent) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Check if process is still alive
-			isAlive := m.checkProcessAlive(agent.GetPID())
+			// Check if SDK client is still functional
+			// We check this by verifying the client is non-nil and healthy
+			isAlive := agent.GetClient() != nil
 
 			// Update agent health status
 			agent.SetHealth(isAlive)
 
 			// Emit event if health changed
 			if lastHealthy && !isAlive {
-				// Agent crashed
+				// Agent crashed or client closed
 				m.eventBus.Publish(events.NewSessionError(
 					&types.Session{ID: m.sessionID},
-					fmt.Sprintf("Agent %s (PID %d) crashed", agent.ID, agent.GetPID()),
+					fmt.Sprintf("Agent %s SDK client failed", agent.ID),
 				))
 			}
 
@@ -158,22 +218,6 @@ func (m *Manager) monitorHealth(ctx context.Context, agent *Agent) {
 	}
 }
 
-// checkProcessAlive checks if a process with given PID is still running
-func (m *Manager) checkProcessAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-
-	// Send signal 0 to check if process exists
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-
-	// Signal 0 doesn't actually send a signal, just checks if process exists
-	err = process.Signal(syscall.Signal(0))
-	return err == nil
-}
 
 // GetAgent returns an agent by ID
 func (m *Manager) GetAgent(agentID string) (*Agent, error) {

@@ -3,12 +3,9 @@ package agent
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"sync"
-	"syscall"
-	"time"
 
+	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -21,15 +18,9 @@ type Agent struct {
 	Model        string
 	WorkspaceDir string
 
-	cmd       *exec.Cmd
-	pid       int
+	client    *claude.ClaudeSDKClient
 	isHealthy bool
 	mu        sync.RWMutex
-
-	// Communication channels
-	stdin  chan string
-	stdout chan string
-	stderr chan string
 }
 
 // NewAgent creates a new agent instance
@@ -41,43 +32,44 @@ func NewAgent(cfg *types.Agent) *Agent {
 		SystemPrompt: cfg.SystemPrompt,
 		Model:        cfg.Model,
 		WorkspaceDir: cfg.WorkspaceDir,
-		stdin:        make(chan string, 10),
-		stdout:       make(chan string, 100),
-		stderr:       make(chan string, 100),
 		isHealthy:    false,
 	}
 }
 
 // Start initializes the agent subprocess with MCP connection
-func (a *Agent) Start(ctx context.Context, mcpEndpoint string, apiKey string) error {
-	// Prepare environment variables
-	env := os.Environ()
-	env = append(env, fmt.Sprintf("ANTHROPIC_API_KEY=%s", apiKey))
-	env = append(env, fmt.Sprintf("MCP_SERVER_ENDPOINT=%s", mcpEndpoint))
-	env = append(env, fmt.Sprintf("WORKSPACE_DIR=%s", a.WorkspaceDir))
-	env = append(env, fmt.Sprintf("AGENT_ID=%s", a.ID))
-	env = append(env, fmt.Sprintf("AGENT_NAME=%s", a.Name))
-	env = append(env, fmt.Sprintf("AGENT_ROLE=%s", a.Role))
-
-	// Create command to start Claude CLI
-	// NOTE: This assumes 'claude' CLI is available in PATH
-	// In production, this would use the claude-agent-sdk-go
-	a.cmd = exec.CommandContext(ctx, "claude", "--model", a.Model)
-	a.cmd.Env = env
-	a.cmd.Dir = a.WorkspaceDir
-
-	// Set up process group for clean shutdown
-	a.cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
+func (a *Agent) Start(ctx context.Context, mcpServerCmd string, mcpServerArgs []string, apiKey string) error {
+	// Configure SDK options
+	opts := &claude.Options{
+		Context:  ctx,
+		Model:    a.Model,
+		Cwd:      a.WorkspaceDir,
+		MaxTurns: 100, // Default max turns per query
+		Env: map[string]string{
+			"ANTHROPIC_API_KEY": apiKey,
+			"AGENT_ID":          a.ID,
+			"AGENT_NAME":        a.Name,
+			"AGENT_ROLE":        a.Role,
+		},
+		McpServers: map[string]claude.McpServerConfig{
+			"collab-mcp": &claude.McpStdioServerConfig{
+				Command: mcpServerCmd,
+				Args:    mcpServerArgs,
+				Env: map[string]string{
+					"AGENT_ID": a.ID,
+				},
+			},
+		},
+		AllowDangerouslySkipPermissions: true, // Allow tools to run without prompts in headless mode
 	}
 
-	// Start the process
-	if err := a.cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start agent process: %w", err)
+	// Create SDK client
+	client, err := claude.NewClient(opts)
+	if err != nil {
+		return fmt.Errorf("failed to create SDK client: %w", err)
 	}
 
 	a.mu.Lock()
-	a.pid = a.cmd.Process.Pid
+	a.client = client
 	a.isHealthy = true
 	a.mu.Unlock()
 
@@ -89,55 +81,26 @@ func (a *Agent) Stop() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.cmd == nil || a.cmd.Process == nil {
+	if a.client == nil {
 		return nil
 	}
 
-	// Send SIGTERM for graceful shutdown
-	if err := a.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		return fmt.Errorf("failed to send SIGTERM: %w", err)
-	}
-
-	// Wait up to 5 seconds for graceful shutdown
-	done := make(chan error, 1)
-	go func() {
-		done <- a.cmd.Wait()
-	}()
-
-	select {
-	case <-time.After(5 * time.Second):
-		// Graceful shutdown timed out, force kill
-		if err := a.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to kill process: %w", err)
-		}
-		<-done // Wait for process to actually die
-	case err := <-done:
-		// Process exited gracefully
-		if err != nil && err.Error() != "signal: terminated" {
-			return fmt.Errorf("process exit error: %w", err)
-		}
+	// Close SDK client (this will gracefully shutdown the Claude CLI process)
+	if err := a.client.Close(); err != nil {
+		return fmt.Errorf("failed to close SDK client: %w", err)
 	}
 
 	a.isHealthy = false
-	close(a.stdin)
-	close(a.stdout)
-	close(a.stderr)
+	a.client = nil
 
 	return nil
 }
 
-// IsHealthy checks if the agent process is still running
+// IsHealthy checks if the agent SDK client is active
 func (a *Agent) IsHealthy() bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return a.isHealthy
-}
-
-// GetPID returns the process ID of the agent
-func (a *Agent) GetPID() int {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.pid
+	return a.isHealthy && a.client != nil
 }
 
 // SetHealth updates the health status (used by health monitor)
@@ -145,4 +108,11 @@ func (a *Agent) SetHealth(healthy bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.isHealthy = healthy
+}
+
+// GetClient returns the underlying SDK client (for testing/internal use)
+func (a *Agent) GetClient() *claude.ClaudeSDKClient {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.client
 }
