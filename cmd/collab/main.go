@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
-	"github.com/darinhaener/collab/internal/config"
+	"github.com/darinhaener/collab/internal/cli"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -14,15 +14,35 @@ var (
 )
 
 func main() {
-	fmt.Printf("collab version %s\n", version)
-	fmt.Printf("commit: %s, built: %s\n", commit, buildDate)
+	rootCmd := &cobra.Command{
+		Use:   "collab",
+		Short: "Multi-agent AI collaboration orchestrator",
+		Long: `collab is a CLI tool for orchestrating two-agent AI collaborations via file-based communication.
 
-	cfg, err := config.Load("", nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
-		os.Exit(2)
+It manages turn-based execution, real-time monitoring, and automatic completion detection
+when both agents reach consensus on a deliverable.`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 
-	fmt.Printf("workspace: %s\n", cfg.WorkspaceDir)
-	fmt.Printf("model: %s\n", cfg.DefaultModel)
+	// Global flags
+	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose logging")
+	rootCmd.PersistentFlags().Bool("no-color", false, "Disable colored output")
+	rootCmd.PersistentFlags().StringP("config", "c", "", "Config file path (default: ~/.config/collab-cli/config.json)")
+	rootCmd.PersistentFlags().StringP("workspace", "w", "", "Workspace directory (default: ~/.local/share/collab-cli/sessions)")
+
+	// Add commands
+	rootCmd.AddCommand(cli.NewRunCommand())
+	rootCmd.AddCommand(cli.NewResumeCommand())
+	rootCmd.AddCommand(cli.NewListCommand())
+	rootCmd.AddCommand(cli.NewShowCommand())
+	rootCmd.AddCommand(cli.NewWatchCommand())
+	rootCmd.AddCommand(cli.NewValidateCommand())
+	rootCmd.AddCommand(cli.NewInitCommand())
+	rootCmd.AddCommand(cli.NewCleanCommand())
+	rootCmd.AddCommand(cli.NewVersionCommand(version, commit, buildDate))
+
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(2)
+	}
 }
