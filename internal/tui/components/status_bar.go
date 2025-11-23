@@ -1,0 +1,73 @@
+package components
+
+import (
+	"fmt"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Styles for status bar
+var (
+	statusBarStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("62")).
+			Foreground(lipgloss.Color("15")).
+			Padding(0, 1)
+
+	statusBarKeyStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("15")).
+				Background(lipgloss.Color("240")).
+				Padding(0, 1)
+)
+
+// RenderStatusBar renders the bottom status bar with keybindings
+func RenderStatusBar(fileCount int, selectedPane string, width int) string {
+	// File count
+	files := fmt.Sprintf("Files: %d", fileCount)
+
+	// Current pane indicator
+	paneIndicator := fmt.Sprintf("Pane: %s", selectedPane)
+
+	// Keybindings help
+	keys := []string{
+		"↑/↓:Navigate",
+		"←/→:Switch",
+		"Tab:File",
+		"q:Quit",
+		"?:Help",
+	}
+
+	keysStr := lipgloss.JoinHorizontal(lipgloss.Left,
+		statusBarKeyStyle.Render(keys[0]),
+		" ",
+		statusBarKeyStyle.Render(keys[1]),
+		" ",
+		statusBarKeyStyle.Render(keys[2]),
+		" ",
+		statusBarKeyStyle.Render(keys[3]),
+		" ",
+		statusBarKeyStyle.Render(keys[4]),
+	)
+
+	// Build status bar layout
+	leftSection := lipgloss.JoinHorizontal(lipgloss.Left,
+		files,
+		" │ ",
+		paneIndicator,
+	)
+
+	// Calculate spacing
+	usedWidth := lipgloss.Width(leftSection) + lipgloss.Width(keysStr)
+	spacing := width - usedWidth - 4
+	if spacing < 1 {
+		spacing = 1
+	}
+
+	statusBar := lipgloss.JoinHorizontal(lipgloss.Left,
+		leftSection,
+		lipgloss.NewStyle().Width(spacing).Render(""),
+		keysStr,
+	)
+
+	return statusBarStyle.Width(width).Render(statusBar)
+}
