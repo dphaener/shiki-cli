@@ -175,12 +175,12 @@ description: "Work package task list for multi-agent collaboration CLI"
 **Prompt**: `tasks/planned/WP05-mcp-server.md`
 
 ### Included Subtasks
-- [ ] T025: Implement mcp/server.go (StartMCPServer with STDIO transport, graceful shutdown on context cancellation)
-- [ ] T026: Implement mcp/tools.go (tool registration with MCP framework, schema definitions per contracts/mcp-tools.json)
-- [ ] T027: Implement mcp/handlers.go part 1 (handleSendMessage, handleReadMessages with storage delegation and event emission)
-- [ ] T028: Implement mcp/handlers.go part 2 (handleWriteSharedContext, handleReadSharedContext)
-- [ ] T029: Implement mcp/handlers.go part 3 (handleUpdateMemory, handleReadMemory with per-agent isolation)
-- [ ] T030: Implement mcp/handlers.go part 4 (handleSubmitDeliverable with content comparison logic, SessionCompleted event)
+- [X] T025: Implement mcp/server.go (StartMCPServer with STDIO transport, graceful shutdown on context cancellation) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP05-mcp-server.md]
+- [X] T026: Implement mcp/tools.go (tool registration with MCP framework, schema definitions per contracts/mcp-tools.json) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP05-mcp-server.md]
+- [X] T027: Implement mcp/handlers.go part 1 (handleSendMessage, handleReadMessages with storage delegation and event emission) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP05-mcp-server.md]
+- [X] T028: Implement mcp/handlers.go part 2 (handleWriteSharedContext, handleReadSharedContext) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP05-mcp-server.md]
+- [X] T029: Implement mcp/handlers.go part 3 (handleUpdateMemory, handleReadMemory with per-agent isolation) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP05-mcp-server.md]
+- [X] T030: Implement mcp/handlers.go part 4 (handleSubmitDeliverable with content comparison logic, SessionCompleted event) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP05-mcp-server.md]
 
 ### Implementation Notes
 1. Single shared MCP server for both agents (Decision 1)
