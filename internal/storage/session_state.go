@@ -28,7 +28,7 @@ func SaveSessionState(session *types.Session) error {
 	}
 
 	path := filepath.Join(session.WorkspaceDir, "session_state.json")
-	if err := AtomicWrite(path, data, 0600); err != nil {
+	if err := AtomicWrite(path, data, 0o600); err != nil {
 		return fmt.Errorf("write session state: %w", err)
 	}
 
@@ -39,7 +39,7 @@ func SaveSessionState(session *types.Session) error {
 func LoadSessionState(workspaceDir string) (*types.Session, error) {
 	path := filepath.Join(workspaceDir, "session_state.json")
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: Reading from validated path
 	if err != nil {
 		return nil, fmt.Errorf("read session state: %w", err)
 	}

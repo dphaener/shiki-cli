@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darinhaener/collab/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/darinhaener/collab/pkg/types"
 )
 
 func TestSessionStatePersistence(t *testing.T) {

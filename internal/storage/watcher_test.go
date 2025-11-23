@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darinhaener/collab/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/darinhaener/collab/pkg/types"
 )
 
 func TestWatcherBasicFileChange(t *testing.T) {
@@ -18,7 +19,7 @@ func TestWatcherBasicFileChange(t *testing.T) {
 
 	watcher, err := NewWatcher(wsDir, eventChan)
 	require.NoError(t, err)
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -30,7 +31,7 @@ func TestWatcherBasicFileChange(t *testing.T) {
 
 	// Write a file
 	testFile := filepath.Join(wsDir, "test.txt")
-	err = os.WriteFile(testFile, []byte("test content"), 0600)
+	err = os.WriteFile(testFile, []byte("test content"), 0o600)
 	require.NoError(t, err)
 
 	// Wait for event
@@ -51,7 +52,7 @@ func TestWatcherIgnoresTempFiles(t *testing.T) {
 
 	watcher, err := NewWatcher(wsDir, eventChan)
 	require.NoError(t, err)
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -62,7 +63,7 @@ func TestWatcherIgnoresTempFiles(t *testing.T) {
 
 	// Write a temp file
 	tempFile := filepath.Join(wsDir, ".tmp-12345")
-	err = os.WriteFile(tempFile, []byte("temp"), 0600)
+	err = os.WriteFile(tempFile, []byte("temp"), 0o600)
 	require.NoError(t, err)
 
 	// Should not receive event for temp file
@@ -77,14 +78,14 @@ func TestWatcherIgnoresTempFiles(t *testing.T) {
 func TestWatcherSubdirectories(t *testing.T) {
 	wsDir := t.TempDir()
 	messagesDir := filepath.Join(wsDir, "messages")
-	err := os.MkdirAll(messagesDir, 0700)
+	err := os.MkdirAll(messagesDir, 0o700)
 	require.NoError(t, err)
 
 	eventChan := make(chan types.Event, 100)
 
 	watcher, err := NewWatcher(wsDir, eventChan)
 	require.NoError(t, err)
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -95,7 +96,7 @@ func TestWatcherSubdirectories(t *testing.T) {
 
 	// Write file in subdirectory
 	testFile := filepath.Join(messagesDir, "message.md")
-	err = os.WriteFile(testFile, []byte("content"), 0600)
+	err = os.WriteFile(testFile, []byte("content"), 0o600)
 	require.NoError(t, err)
 
 	// Wait for event
@@ -135,7 +136,7 @@ func TestWatcherLatency(t *testing.T) {
 
 	watcher, err := NewWatcher(wsDir, eventChan)
 	require.NoError(t, err)
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -152,7 +153,7 @@ func TestWatcherLatency(t *testing.T) {
 		start := time.Now()
 
 		testFile := filepath.Join(wsDir, "latency-test.txt")
-		err = os.WriteFile(testFile, []byte("test"), 0600)
+		err = os.WriteFile(testFile, []byte("test"), 0o600)
 		require.NoError(t, err)
 
 		// Wait for event
@@ -165,7 +166,7 @@ func TestWatcherLatency(t *testing.T) {
 		}
 
 		// Remove file for next iteration
-		os.Remove(testFile)
+		_ = os.Remove(testFile)
 		time.Sleep(50 * time.Millisecond)
 	}
 
@@ -182,7 +183,7 @@ func BenchmarkWatcherLatency(b *testing.B) {
 	eventChan := make(chan types.Event, 1000)
 
 	watcher, _ := NewWatcher(wsDir, eventChan)
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -197,7 +198,7 @@ func BenchmarkWatcherLatency(b *testing.B) {
 
 		// Write file
 		path := filepath.Join(wsDir, "bench.txt")
-		os.WriteFile(path, []byte("test"), 0600)
+		_ = os.WriteFile(path, []byte("test"), 0o600)
 
 		// Wait for event
 		<-eventChan
@@ -208,7 +209,7 @@ func BenchmarkWatcherLatency(b *testing.B) {
 		}
 
 		// Cleanup
-		os.Remove(path)
+		_ = os.Remove(path)
 		time.Sleep(10 * time.Millisecond)
 	}
 }

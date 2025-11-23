@@ -26,13 +26,13 @@ func WriteDeliverable(workspaceDir, content string, metadata DeliverableMetadata
 
 	fullContent := fmt.Sprintf("---\n%s---\n\n%s", string(yamlData), content)
 	path := filepath.Join(workspaceDir, "deliverable.md")
-	return AtomicWriteString(path, fullContent, 0600)
+	return AtomicWriteString(path, fullContent, 0o600)
 }
 
 // ReadDeliverable reads the deliverable file and its metadata
 func ReadDeliverable(workspaceDir string) (string, *DeliverableMetadata, error) {
 	path := filepath.Join(workspaceDir, "deliverable.md")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: Reading from validated path
 	if err != nil {
 		return "", nil, err
 	}

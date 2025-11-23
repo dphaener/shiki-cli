@@ -24,11 +24,11 @@ func TestDefault(t *testing.T) {
 
 func TestEnvOverrides(t *testing.T) {
 	// Set environment variables
-	os.Setenv("COLLAB_CLI_MODEL", "claude-opus-4")
-	os.Setenv("COLLAB_CLI_NO_COLOR", "true")
+	_ = os.Setenv("COLLAB_CLI_MODEL", "claude-opus-4")
+	_ = os.Setenv("COLLAB_CLI_NO_COLOR", "true")
 	defer func() {
-		os.Unsetenv("COLLAB_CLI_MODEL")
-		os.Unsetenv("COLLAB_CLI_NO_COLOR")
+		_ = os.Unsetenv("COLLAB_CLI_MODEL")
+		_ = os.Unsetenv("COLLAB_CLI_NO_COLOR")
 	}()
 
 	cfg, err := Load("", nil)
@@ -69,8 +69,8 @@ func TestCLIOverrides(t *testing.T) {
 
 func TestPriorityOrder(t *testing.T) {
 	// Set env var
-	os.Setenv("COLLAB_CLI_MODEL", "env-model")
-	defer os.Unsetenv("COLLAB_CLI_MODEL")
+	_ = os.Setenv("COLLAB_CLI_MODEL", "env-model")
+	defer func() { _ = os.Unsetenv("COLLAB_CLI_MODEL") }()
 
 	// CLI override should win
 	overrides := map[string]interface{}{

@@ -14,11 +14,11 @@ type WorkspaceStructure struct {
 }
 
 // CreateWorkspace initializes session directory
-func CreateWorkspace(sessionID string, baseDir string, structure []WorkspaceStructure) (string, error) {
+func CreateWorkspace(sessionID, baseDir string, structure []WorkspaceStructure) (string, error) {
 	workspaceDir := filepath.Join(baseDir, sessionID)
 
 	// Create root with restricted permissions (SEC-002)
-	if err := os.MkdirAll(workspaceDir, 0700); err != nil {
+	if err := os.MkdirAll(workspaceDir, 0o700); err != nil {
 		return "", fmt.Errorf("create workspace dir: %w", err)
 	}
 
@@ -26,7 +26,7 @@ func CreateWorkspace(sessionID string, baseDir string, structure []WorkspaceStru
 	standardDirs := []string{"messages", "memory"}
 	for _, dir := range standardDirs {
 		path := filepath.Join(workspaceDir, dir)
-		if err := os.MkdirAll(path, 0700); err != nil {
+		if err := os.MkdirAll(path, 0o700); err != nil {
 			return "", fmt.Errorf("create %s dir: %w", dir, err)
 		}
 	}
@@ -40,7 +40,7 @@ func CreateWorkspace(sessionID string, baseDir string, structure []WorkspaceStru
 
 	for relPath, content := range initialFiles {
 		path := filepath.Join(workspaceDir, relPath)
-		if err := AtomicWriteString(path, content, 0600); err != nil {
+		if err := AtomicWriteString(path, content, 0o600); err != nil {
 			return "", fmt.Errorf("create %s: %w", relPath, err)
 		}
 	}
@@ -50,19 +50,19 @@ func CreateWorkspace(sessionID string, baseDir string, structure []WorkspaceStru
 		path := filepath.Join(workspaceDir, item.Path)
 
 		if item.Type == "directory" {
-			if err := os.MkdirAll(path, 0700); err != nil {
+			if err := os.MkdirAll(path, 0o700); err != nil {
 				return "", fmt.Errorf("create custom dir %s: %w", item.Path, err)
 			}
 		} else if item.Type == "file" {
 			dir := filepath.Dir(path)
-			if err := os.MkdirAll(dir, 0700); err != nil {
+			if err := os.MkdirAll(dir, 0o700); err != nil {
 				return "", fmt.Errorf("create parent dir for %s: %w", item.Path, err)
 			}
 			content := item.Content
 			if content == "" {
 				content = ""
 			}
-			if err := AtomicWriteString(path, content, 0600); err != nil {
+			if err := AtomicWriteString(path, content, 0o600); err != nil {
 				return "", fmt.Errorf("create custom file %s: %w", item.Path, err)
 			}
 		}
@@ -77,7 +77,7 @@ func CleanupWorkspace(workspaceDir string) error {
 }
 
 // WorkspaceExists checks if session workspace exists
-func WorkspaceExists(sessionID string, baseDir string) bool {
+func WorkspaceExists(sessionID, baseDir string) bool {
 	path := filepath.Join(baseDir, sessionID)
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()

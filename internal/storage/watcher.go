@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/darinhaener/collab/pkg/types"
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/darinhaener/collab/pkg/types"
 )
 
 // Watcher monitors filesystem changes and emits events
@@ -27,7 +27,7 @@ func NewWatcher(workspaceDir string, eventChan chan<- types.Event) (*Watcher, er
 
 	// Watch workspace directory recursively
 	if err := fsWatcher.Add(workspaceDir); err != nil {
-		fsWatcher.Close()
+		_ = fsWatcher.Close()
 		return nil, fmt.Errorf("watch workspace: %w", err)
 	}
 
@@ -105,21 +105,4 @@ func (w *Watcher) Close() error {
 func (w *Watcher) AddDirectory(dir string) error {
 	path := filepath.Join(w.workspaceDir, dir)
 	return w.fsWatcher.Add(path)
-}
-
-// shouldIgnoreFile determines if a file should be ignored
-func shouldIgnoreFile(path string) bool {
-	baseName := filepath.Base(path)
-
-	// Ignore temp files
-	if strings.HasPrefix(baseName, ".tmp") {
-		return true
-	}
-
-	// Ignore hidden files (except .gitkeep)
-	if strings.HasPrefix(baseName, ".") && baseName != ".gitkeep" {
-		return true
-	}
-
-	return false
 }

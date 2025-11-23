@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darinhaener/collab/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/darinhaener/collab/pkg/types"
 )
 
 // Message tests
@@ -16,7 +17,7 @@ func TestWriteAndReadMessages(t *testing.T) {
 	wsDir := t.TempDir()
 
 	// Create messages directory
-	err := os.MkdirAll(filepath.Join(wsDir, "messages"), 0700)
+	err := os.MkdirAll(filepath.Join(wsDir, "messages"), 0o700)
 	require.NoError(t, err)
 
 	now := time.Now()
@@ -64,7 +65,7 @@ func TestWriteAndReadMessages(t *testing.T) {
 func TestReadMessagesSinceTurn(t *testing.T) {
 	wsDir := t.TempDir()
 
-	err := os.MkdirAll(filepath.Join(wsDir, "messages"), 0700)
+	err := os.MkdirAll(filepath.Join(wsDir, "messages"), 0o700)
 	require.NoError(t, err)
 
 	now := time.Now()
@@ -78,7 +79,7 @@ func TestReadMessagesSinceTurn(t *testing.T) {
 			Content:   "Message",
 			Timestamp: now.Add(time.Duration(i) * time.Minute),
 		}
-		err := WriteMessage(wsDir, msg)
+		err = WriteMessage(wsDir, msg)
 		require.NoError(t, err)
 	}
 
@@ -123,7 +124,7 @@ func TestReadSharedContextMissing(t *testing.T) {
 func TestWriteAndReadMemory(t *testing.T) {
 	wsDir := t.TempDir()
 
-	err := os.MkdirAll(filepath.Join(wsDir, "memory"), 0700)
+	err := os.MkdirAll(filepath.Join(wsDir, "memory"), 0o700)
 	require.NoError(t, err)
 
 	agentID := "agent_1"
@@ -148,7 +149,7 @@ func TestReadMemoryMissing(t *testing.T) {
 func TestMemoryIsolation(t *testing.T) {
 	wsDir := t.TempDir()
 
-	err := os.MkdirAll(filepath.Join(wsDir, "memory"), 0700)
+	err := os.MkdirAll(filepath.Join(wsDir, "memory"), 0o700)
 	require.NoError(t, err)
 
 	// Write different content for each agent
@@ -194,7 +195,7 @@ func TestReadDeliverableNoMetadata(t *testing.T) {
 
 	// Write file without metadata
 	path := filepath.Join(wsDir, "deliverable.md")
-	err := os.WriteFile(path, []byte("Plain content"), 0600)
+	err := os.WriteFile(path, []byte("Plain content"), 0o600)
 	require.NoError(t, err)
 
 	content, meta, err := ReadDeliverable(wsDir)

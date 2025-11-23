@@ -25,14 +25,14 @@ func TestCreateWorkspace(t *testing.T) {
 	assert.DirExists(t, filepath.Join(wsDir, "messages"))
 	assert.DirExists(t, filepath.Join(wsDir, "memory"))
 	assert.FileExists(t, filepath.Join(wsDir, "shared_context.md"))
-	assert.FileExists(t, filepath.Join(wsDir, "memory/agent_1_memory.md"))
-	assert.FileExists(t, filepath.Join(wsDir, "memory/agent_2_memory.md"))
+	assert.FileExists(t, filepath.Join(wsDir, "memory", "agent_1_memory.md"))
+	assert.FileExists(t, filepath.Join(wsDir, "memory", "agent_2_memory.md"))
 
 	// Verify custom structure
 	assert.DirExists(t, filepath.Join(wsDir, "designs"))
-	assert.FileExists(t, filepath.Join(wsDir, "designs/draft.md"))
+	assert.FileExists(t, filepath.Join(wsDir, "designs", "draft.md"))
 
-	content, _ := os.ReadFile(filepath.Join(wsDir, "designs/draft.md"))
+	content, _ := os.ReadFile(filepath.Join(wsDir, "designs", "draft.md")) //nolint:gosec // G304: Test file path
 	assert.Equal(t, "# Draft\n", string(content))
 }
 
@@ -46,12 +46,12 @@ func TestCreateWorkspacePermissions(t *testing.T) {
 	// Check workspace dir permissions
 	info, err := os.Stat(wsDir)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0700), info.Mode().Perm())
+	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
 
 	// Check file permissions
 	info, err = os.Stat(filepath.Join(wsDir, "shared_context.md"))
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }
 
 func TestWorkspaceExists(t *testing.T) {
@@ -103,10 +103,10 @@ func TestCreateWorkspaceNestedStructure(t *testing.T) {
 
 	// Verify nested structure
 	assert.DirExists(t, filepath.Join(wsDir, "src"))
-	assert.DirExists(t, filepath.Join(wsDir, "src/components"))
-	assert.FileExists(t, filepath.Join(wsDir, "src/components/app.go"))
+	assert.DirExists(t, filepath.Join(wsDir, "src", "components"))
+	assert.FileExists(t, filepath.Join(wsDir, "src", "components", "app.go"))
 	assert.FileExists(t, filepath.Join(wsDir, "README.md"))
 
-	content, _ := os.ReadFile(filepath.Join(wsDir, "src/components/app.go"))
+	content, _ := os.ReadFile(filepath.Join(wsDir, "src", "components", "app.go")) //nolint:gosec // G304: Test file path
 	assert.Equal(t, "package main\n", string(content))
 }

@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darinhaener/collab/pkg/types"
 	"gopkg.in/yaml.v3"
+
+	"github.com/darinhaener/collab/pkg/types"
 )
 
 // MessageFrontmatter is the YAML header for message files
@@ -42,7 +43,7 @@ func WriteMessage(workspaceDir string, msg *types.Message) error {
 	// Build full content
 	content := fmt.Sprintf("---\n%s---\n\n%s", string(yamlData), msg.Content)
 
-	if err := AtomicWriteString(path, content, 0600); err != nil {
+	if err := AtomicWriteString(path, content, 0o600); err != nil {
 		return fmt.Errorf("write message file: %w", err)
 	}
 
@@ -53,7 +54,7 @@ func WriteMessage(workspaceDir string, msg *types.Message) error {
 }
 
 // ReadMessages reads all messages from the other agent
-func ReadMessages(workspaceDir string, forAgent string, sinceTurn int) ([]*types.Message, error) {
+func ReadMessages(workspaceDir, forAgent string, sinceTurn int) ([]*types.Message, error) {
 	messagesDir := filepath.Join(workspaceDir, "messages")
 
 	entries, err := os.ReadDir(messagesDir)
@@ -94,7 +95,7 @@ func ReadMessages(workspaceDir string, forAgent string, sinceTurn int) ([]*types
 }
 
 func parseMessageFile(path string) (*types.Message, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: Reading from validated path
 	if err != nil {
 		return nil, err
 	}

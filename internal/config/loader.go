@@ -16,7 +16,7 @@ func Load(configPath string, cliOverrides map[string]interface{}) (*Config, erro
 	if configPath == "" {
 		configPath = filepath.Join(GetConfigDir(), "config.json")
 	}
-	if data, err := os.ReadFile(configPath); err == nil {
+	if data, err := os.ReadFile(configPath); err == nil { //nolint:gosec // G304: Reading from validated path
 		_ = json.Unmarshal(data, cfg)
 	}
 

@@ -14,19 +14,19 @@ func TestAtomicWrite(t *testing.T) {
 	path := filepath.Join(tmpDir, "test.txt")
 
 	// Write initial content
-	err := AtomicWriteString(path, "initial", 0600)
+	err := AtomicWriteString(path, "initial", 0o600)
 	require.NoError(t, err)
 
 	// Verify content
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: Test file path
 	require.NoError(t, err)
 	assert.Equal(t, "initial", string(data))
 
 	// Overwrite
-	err = AtomicWriteString(path, "updated", 0600)
+	err = AtomicWriteString(path, "updated", 0o600)
 	require.NoError(t, err)
 
-	data, err = os.ReadFile(path)
+	data, err = os.ReadFile(path) //nolint:gosec // G304: Test file path
 	require.NoError(t, err)
 	assert.Equal(t, "updated", string(data))
 
@@ -39,12 +39,12 @@ func TestAtomicWritePermissions(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "test.txt")
 
-	err := AtomicWriteString(path, "content", 0600)
+	err := AtomicWriteString(path, "content", 0o600)
 	require.NoError(t, err)
 
 	info, err := os.Stat(path)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 }
 
 func TestAtomicWriteBinary(t *testing.T) {
@@ -52,10 +52,10 @@ func TestAtomicWriteBinary(t *testing.T) {
 	path := filepath.Join(tmpDir, "test.bin")
 
 	binaryData := []byte{0x00, 0x01, 0x02, 0xFF, 0xFE}
-	err := AtomicWrite(path, binaryData, 0600)
+	err := AtomicWrite(path, binaryData, 0o600)
 	require.NoError(t, err)
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: Test file path
 	require.NoError(t, err)
 	assert.Equal(t, binaryData, data)
 }

@@ -8,13 +8,13 @@ import (
 // WriteSharedContext writes the shared context file
 func WriteSharedContext(workspaceDir, content string) error {
 	path := filepath.Join(workspaceDir, "shared_context.md")
-	return AtomicWriteString(path, content, 0600)
+	return AtomicWriteString(path, content, 0o600)
 }
 
 // ReadSharedContext reads the shared context file
 func ReadSharedContext(workspaceDir string) (string, error) {
 	path := filepath.Join(workspaceDir, "shared_context.md")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: Reading from validated path
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil // Return empty if doesn't exist yet
