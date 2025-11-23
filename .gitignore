@@ -1,0 +1,121 @@
+# Sekkei-specific
+.sekkei/memory/
+sekkei-specs/*/research/
+sekkei-specs/*/tasks/doing/
+sekkei-specs/*/tasks/for_review/
+.worktrees/
+
+# Ruby
+*.gem
+*.rbc
+/.config
+/coverage/
+/InstalledFiles
+/pkg/
+/spec/reports/
+/spec/examples.txt
+/test/tmp/
+/test/version_tmp/
+/tmp/
+
+# RDoc documentation
+/doc/
+/rdoc/
+
+# Environment normalization
+/.bundle/
+/vendor/bundle
+/lib/bundler/man/
+
+# Bundler binstubs
+/bin/
+
+# Ignore Gemfile.lock for gems (keep it for applications)
+Gemfile.lock
+
+# RubyMine
+.idea/
+
+# VS Code
+.vscode/
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Logs
+*.log
+log/
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+coverage/
+.coverage
+
+# RSpec
+.rspec_status
+
+# Simplecov
+/coverage/
+
+# Byebug
+.byebug_history
+
+# Pry
+.pry_history
