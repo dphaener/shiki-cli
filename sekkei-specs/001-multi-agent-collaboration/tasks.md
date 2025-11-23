@@ -298,7 +298,7 @@ description: "Work package task list for multi-agent collaboration CLI"
 - [X] T049: Implement cli/clean.go (filter sessions by age/status, confirm before deletion unless --force) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
 - [X] T050: Implement cli/version.go (display version, Go version, build date, commit hash using ldflags) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
 - [X] T051: Implement cli/watch.go (attach TUI to running session or replay completed session) [depends on WP09] ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
-- [ ] T052: Add integration tests for all CLI commands (required by Definition of Done) ⚠️ [sekkei-specs/001-multi-agent-collaboration/tasks/planned/WP08-cli-commands.md]
+- [X] T052: Add integration tests for all CLI commands (required by Definition of Done) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP08-cli-commands.md]
 
 ### Implementation Notes
 1. Exit codes per contract: 0 (success), 1 (incomplete), 2 (error), 3 (validation), 130 (user interrupt)
