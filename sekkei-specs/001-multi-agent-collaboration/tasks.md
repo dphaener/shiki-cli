@@ -104,11 +104,11 @@ description: "Work package task list for multi-agent collaboration CLI"
 **Prompt**: `tasks/planned/WP03-eventbus-logging.md`
 
 ### Included Subtasks
-- [ ] T015: Define all event types in events/types.go (SessionCreated, TurnStarted, MessageSent, FileUpdated, etc. - 14 types total)
-- [ ] T016: Implement events/bus.go (NewEventBus, Subscribe, Publish with non-blocking select/default, Shutdown)
-- [ ] T017: Implement events/subscriber.go (subscription management, channel cleanup)
-- [ ] T018: Implement logging/logger.go (structured JSON logger, configurable levels)
-- [ ] T019: Implement logging/events.go (EventBus subscriber that logs all events to orchestrator.log)
+- [X] T015: Define all event types in events/types.go (SessionCreated, TurnStarted, MessageSent, FileUpdated, etc. - 14 types total) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP03-eventbus-logging.md]
+- [X] T016: Implement events/bus.go (NewEventBus, Subscribe, Publish with non-blocking select/default, Shutdown) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP03-eventbus-logging.md]
+- [X] T017: Implement events/subscriber.go (subscription management, channel cleanup) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP03-eventbus-logging.md]
+- [X] T018: Implement logging/logger.go (structured JSON logger, configurable levels) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP03-eventbus-logging.md]
+- [X] T019: Implement logging/events.go (EventBus subscriber that logs all events to orchestrator.log) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP03-eventbus-logging.md]
 
 ### Implementation Notes
 1. Non-blocking publish: `select { case ch <- event: default: }` prevents slow subscribers from blocking (Decision 2)
