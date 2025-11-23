@@ -139,11 +139,11 @@ description: "Work package task list for multi-agent collaboration CLI"
 **Prompt**: `tasks/planned/WP04-template-system.md`
 
 ### Included Subtasks
-- [ ] T020: Define TaskTemplate struct in template/template.go (matches data model spec)
-- [ ] T021: Implement template/parser.go (extract YAML frontmatter, parse markdown body, handle malformed YAML with line numbers)
-- [ ] T022: Implement template/validator.go (check required fields, validate types/ranges, return detailed errors)
-- [ ] T023: Implement template/scaffold.go (create directories and initial files from workspace_structure field)
-- [ ] T024: Create example templates (simple-agreement.md, code-review.md, architecture-design.md)
+- [X] T020: Define TaskTemplate struct in template/template.go (matches data model spec) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP04-template-system.md]
+- [X] T021: Implement template/parser.go (extract YAML frontmatter, parse markdown body, handle malformed YAML with line numbers) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP04-template-system.md]
+- [X] T022: Implement template/validator.go (check required fields, validate types/ranges, return detailed errors) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP04-template-system.md]
+- [X] T023: Implement template/scaffold.go (create directories and initial files from workspace_structure field) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP04-template-system.md]
+- [X] T024: Create example templates (simple-agreement.md, code-review.md, architecture-design.md) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP04-template-system.md]
 
 ### Implementation Notes
 1. YAML frontmatter delimiter: `---` at start and end (standard markdown convention)
