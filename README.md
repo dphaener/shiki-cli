@@ -1,10 +1,40 @@
 # Collab
 
-A Sekkei-powered specification-driven development project.
+A production-ready Go CLI tool for orchestrating two-agent AI collaboration via file-based communication, turn-based execution, and real-time TUI monitoring.
 
 ## About This Project
 
+Collab enables Claude AI agents to work together on complex tasks through structured collaboration. The system uses file-based communication, a shared MCP tool server, and supports pause/resume capabilities with zero data loss.
+
 This project uses [Sekkei](https://github.com/yourusername/sekkei) for AI-assisted specification-driven development workflows. All features start with a specification, are broken down into testable work packages, and follow a systematic development process.
+
+## Features
+
+- **Two-Agent Collaboration**: Orchestrate agents working together on complex tasks
+- **File-Based Communication**: All artifacts stored as human-readable Markdown
+- **Pause/Resume**: Save session state at any time and resume later
+- **Real-Time Monitoring**: Terminal UI shows live progress and metrics
+- **Cost Tracking**: Monitor token usage and costs per agent and session
+- **MCP Tool Integration**: Agents communicate via Model Context Protocol
+
+## Prerequisites
+
+- Go 1.24+ (project uses Go 1.24)
+- Anthropic API key (set `ANTHROPIC_API_KEY` environment variable)
+- golangci-lint (for development)
+
+## Installation
+
+```bash
+# Build the binary
+make build
+
+# Run tests
+make test
+
+# Install to $GOPATH/bin
+make install
+```
 
 ## Quick Start
 
@@ -67,6 +97,30 @@ This project includes Claude Code slash commands in `.claude/commands/`:
 
 ## Project Structure
 
+### Go Application Structure
+```
+collab/
+├── cmd/collab/          # Entry point
+├── internal/            # Private packages
+│   ├── cli/             # CLI commands (Cobra)
+│   ├── orchestrator/    # Session & turn execution
+│   ├── agent/           # Agent manager (SDK integration)
+│   ├── mcp/             # MCP server
+│   ├── storage/         # File operations (atomic writes)
+│   ├── events/          # EventBus (channel-based pub/sub)
+│   ├── tui/             # Terminal UI (Bubbletea)
+│   ├── template/        # Task template parser
+│   ├── config/          # Configuration (XDG-compliant)
+│   └── logging/         # Structured logging
+├── pkg/types/           # Shared types
+├── examples/            # Example task templates
+├── docs/                # Documentation
+├── scripts/             # Build scripts
+├── Makefile             # Build automation
+└── .golangci.yml        # Linter configuration
+```
+
+### Sekkei Project Structure
 ```
 Collab/
 ├── .sekkei/                  # Sekkei configuration and templates

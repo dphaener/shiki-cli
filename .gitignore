@@ -119,3 +119,14 @@ coverage/
 
 # Pry
 .pry_history
+
+# Go
+/collab
+*.exe
+/vendor/
+*.test
+*.out
+coverage.out
+
+# Sessions data (if testing locally)
+.local/share/collab-cli/sessions/*
