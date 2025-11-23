@@ -2,98 +2,271 @@
 
 A production-ready Go CLI tool for orchestrating two-agent AI collaboration via file-based communication, turn-based execution, and real-time TUI monitoring.
 
-## About This Project
+## Overview
 
-Collab enables Claude AI agents to work together on complex tasks through structured collaboration. The system uses file-based communication, a shared MCP tool server, and supports pause/resume capabilities with zero data loss.
+Collab enables two Claude AI agents to work together on complex tasks through structured collaboration. The system uses:
 
-This project uses [Sekkei](https://github.com/yourusername/sekkei) for AI-assisted specification-driven development workflows. All features start with a specification, are broken down into testable work packages, and follow a systematic development process.
+- **File-based communication** - All artifacts stored as human-readable Markdown
+- **Turn-based execution** - Agents alternate turns, preventing race conditions
+- **MCP tool integration** - 7 collaboration tools for messaging, context, memory, and deliverables
+- **Real-time TUI** - Monitor agent collaboration live with split-pane terminal UI
+- **Pause/resume** - Save session state at any time with zero data loss
+- **Cost tracking** - Monitor token usage and costs per agent and session
+
+This project uses [Sekkei](https://github.com/yourusername/sekkei) for AI-assisted specification-driven development workflows.
 
 ## Features
 
-- **Two-Agent Collaboration**: Orchestrate agents working together on complex tasks
-- **File-Based Communication**: All artifacts stored as human-readable Markdown
-- **Pause/Resume**: Save session state at any time and resume later
-- **Real-Time Monitoring**: Terminal UI shows live progress and metrics
-- **Cost Tracking**: Monitor token usage and costs per agent and session
-- **MCP Tool Integration**: Agents communicate via Model Context Protocol
+- **Template-driven collaboration** - Define agent roles, system prompts, and workspace structure via YAML frontmatter
+- **Turn-based orchestration** - Agents alternate turns with configurable timeouts and max turn limits
+- **7 MCP collaboration tools**:
+  - `send_message` / `read_messages` - Agent-to-agent communication
+  - `write_shared_context` / `read_shared_context` - Shared workspace state
+  - `update_memory` / `read_memory` - Per-agent private notes
+  - `submit_deliverable` - Completion with approval mechanism
+- **Session management** - Create, pause, resume, list, show, clean sessions
+- **Real-time TUI** - Split-pane view with turn history, file viewer, and keyboard navigation
+- **Atomic file operations** - Temp-file-and-rename pattern prevents corruption
+- **Event-driven architecture** - EventBus with <100ms TUI update latency
+- **Single-binary deployment** - No dependencies, <50MB binary size
 
 ## Prerequisites
 
-- Go 1.24+ (project uses Go 1.24)
-- Anthropic API key (set `ANTHROPIC_API_KEY` environment variable)
-- golangci-lint (for development)
-
-## Installation
-
-```bash
-# Build the binary
-make build
-
-# Run tests
-make test
-
-# Install to $GOPATH/bin
-make install
-```
+- **Go 1.24+** (project uses Go 1.24)
+- **Anthropic API key** - Set `ANTHROPIC_API_KEY` environment variable
+- **golangci-lint** - For development (optional)
 
 ## Quick Start
 
-### Create a New Feature
+### Installation
 
-```
-/sekkei.specify "Add user authentication"
-```
+**Option 1: Build from source**
+```bash
+# Clone repository
+git clone https://github.com/yourusername/collab.git
+cd collab
 
-This creates a feature specification in `sekkei-specs/###-feature-name/spec.md`.
+# Build the binary
+make build
 
-### Generate Implementation Plan
+# Install to $HOME/.local/bin
+make install
 
-```
-/sekkei.plan
-```
-
-Creates `plan.md` with architecture decisions, technology choices, and implementation phases.
-
-### Break Down Into Tasks
-
-```
-/sekkei.tasks
+# Verify installation
+collab version
 ```
 
-Generates `tasks.md` with work packages and individual task prompts.
+**Option 2: Use install script**
+```bash
+# Build and run install script
+make build
+./scripts/install.sh
 
-### Implement the Feature
-
+# Add to PATH if needed
+export PATH="$HOME/.local/bin:$PATH"
 ```
-/sekkei.implement
+
+### Set API Key
+
+```bash
+export ANTHROPIC_API_KEY="your-api-key-here"
+
+# Or add to ~/.config/collab-cli/config.json:
+{
+  "anthropic_api_key": "your-api-key-here"
+}
 ```
 
-Executes work packages following the Kanban workflow: planned → doing → for_review → done.
+### Run Your First Collaboration
 
-## Workflows
+```bash
+# 1. Validate example template
+collab validate examples/simple-agreement.md
+
+# 2. Run collaboration with TUI
+collab run examples/simple-agreement.md --watch
+
+# 3. Watch agents collaborate in real-time!
+```
+
+**TUI Interface**:
+```
+┌─────────────────────────────────────────────────────────┐
+│ Session: abc123 │ Task │ 00:05:32 │ $0.42              │
+├──────────────────────────┬──────────────────────────────┤
+│                          │                              │
+│  Turn History            │  File Viewer                 │
+│  #1 agent1  5s  $0.12    │  shared_context.md           │
+│  #2 agent2  3s  $0.08    │                              │
+│  #3 agent1  4s  $0.10    │  Current file content...     │
+│                          │                              │
+├──────────────────────────┴──────────────────────────────┤
+│ ⏵ Running │ 5 files │ q=quit Tab=files ↑↓=nav        │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Keyboard Shortcuts**:
+- `↑`/`↓` - Navigate turn history
+- `Tab` - Cycle through files
+- `PgUp`/`PgDn` - Scroll file viewer
+- `Ctrl+C` - Pause session
+- `q` - Quit TUI (session continues)
+
+### Pause and Resume
+
+```bash
+# Pause with Ctrl+C during execution
+# Session state saved automatically
+
+# Resume later
+collab resume <session-id>
+
+# List all sessions
+collab list
+
+# Show session details
+collab show <session-id>
+```
+
+## Commands
+
+### Core Commands
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `run` | Start new collaboration session | `collab run task.md --watch` |
+| `resume` | Continue paused session | `collab resume abc123` |
+| `list` | Show all sessions | `collab list --status=paused` |
+| `show` | Display session details | `collab show abc123 --messages` |
+| `watch` | Attach TUI to session | `collab watch abc123` |
+
+### Template Commands
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `validate` | Check template validity | `collab validate task.md` |
+| `init` | Create new template | `collab init` |
+
+### Utility Commands
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `clean` | Remove old sessions | `collab clean --older-than=7d` |
+| `version` | Show version info | `collab version` |
+
+### Examples
+
+**Run collaboration with TUI**:
+```bash
+collab run examples/architecture-design.md --watch
+```
+
+**Run headless (no TUI)**:
+```bash
+collab run task.md
+# Monitor in another terminal:
+tail -f ~/.local/share/collab-cli/sessions/<session-id>/orchestrator.log
+```
+
+**Resume paused session**:
+```bash
+collab resume abc123 --watch
+```
+
+**List sessions**:
+```bash
+# All sessions
+collab list
+
+# Paused sessions only
+collab list --status=paused --format=table
+
+# JSON output
+collab list --format=json
+```
+
+**Show session details**:
+```bash
+# Summary
+collab show abc123
+
+# With messages
+collab show abc123 --messages
+
+# With deliverable
+collab show abc123 --deliverable
+
+# With logs
+collab show abc123 --logs
+```
+
+**Clean old sessions**:
+```bash
+# Interactive (confirms before deletion)
+collab clean --older-than=7d
+
+# Force (no confirmation)
+collab clean --older-than=30d --force
+
+# Clean completed sessions only
+collab clean --status=completed --older-than=7d
+```
+
+## Documentation
+
+- **[Architecture Overview](docs/architecture.md)** - System architecture, components, data flow
+- **[Task Templates Guide](docs/task-templates.md)** - Template format, examples, best practices
+- **[MCP Tools Reference](docs/mcp-tools.md)** - Tool specifications, usage patterns, examples
+
+## Creating Task Templates
+
+Templates define agent roles, system prompts, and workspace structure using YAML frontmatter:
+
+```markdown
+---
+agent1_name: "Architect"
+agent1_role: "Design systems"
+agent1_system_prompt: |
+  You design scalable, maintainable systems.
+  Focus on trade-offs and constraints.
+agent2_name: "Reviewer"
+agent2_role: "Challenge design decisions"
+agent2_system_prompt: |
+  You review designs critically.
+  Identify weaknesses and edge cases.
+max_turns: 10
+workspace_structure:
+  - path: "design.md"
+    content: "# System Design\n\n"
+---
+
+# Task: Design a Multi-Tenant SaaS Platform
+
+## Requirements
+- Support 10,000+ organizations
+- API response time < 200ms p95
+- GDPR, SOC2 compliance
+
+## Deliverable
+Submit architecture document with diagrams, schema, and cost estimates.
+```
+
+**See** [Task Templates Guide](docs/task-templates.md) for complete documentation.
+
+## Development Workflow (Sekkei)
+
+This project uses [Sekkei](https://github.com/yourusername/sekkei) for specification-driven development:
 
 ### Claude Code Integration
 
-This project includes Claude Code slash commands in `.claude/commands/`:
+Slash commands in `.claude/commands/`:
 
 - `/sekkei.specify` - Create feature specifications
 - `/sekkei.plan` - Generate implementation plans
 - `/sekkei.tasks` - Break down work into tasks
-- `/sekkei.research` - Conduct technical research
 - `/sekkei.implement` - Execute implementation
 - `/sekkei.review` - Review completed work
 - `/sekkei.accept` - Validate and merge features
-- `/sekkei.constitution` - Manage project principles
-
-### Available Scripts
-
-**Bash scripts** (`.sekkei/scripts/bash/`):
-- `setup-spec.sh` - Create new feature specification
-- `setup-plan.sh` - Generate implementation plan
-- `setup-tasks.sh` - Break down into work packages
-- `setup-research.sh` - Set up technical research
-- `setup-implement.sh` - Start implementation workflow
-- `update-agent-context.sh` - Update CLAUDE.md with latest context
 
 ## Project Structure
 
@@ -182,10 +355,86 @@ Project-specific principles and standards are documented in `.sekkei/memory/cons
 
 Use `/sekkei.constitution` to update as the project evolves.
 
+## Contributing
+
+All features follow the Sekkei workflow:
+
+1. Start with `/sekkei.specify` to document the feature
+2. Use `/sekkei.plan` to design the implementation
+3. Run `/sekkei.tasks` to break down into work packages
+4. Execute with `/sekkei.implement`
+5. Review and iterate as needed
+6. Merge with `/sekkei.accept`
+
+## Troubleshooting
+
+### "ANTHROPIC_API_KEY not set"
+
+**Solution**: Export API key or add to config file:
+```bash
+export ANTHROPIC_API_KEY="your-api-key"
+# or
+echo '{"anthropic_api_key": "your-api-key"}' > ~/.config/collab-cli/config.json
+```
+
+### "Template validation failed"
+
+**Solution**: Run `collab validate task.md` to see specific errors. Common issues:
+- Missing required fields (agent names, roles, system prompts, max_turns)
+- Invalid YAML syntax
+- max_turns <= 0
+
+### "Session not found"
+
+**Solution**: Check session ID with `collab list`. Session IDs are short hashes (e.g., `abc123`).
+
+### "Failed to start agent"
+
+**Possible causes**:
+- ANTHROPIC_API_KEY not set
+- Network connectivity issues
+- Anthropic API rate limits
+
+**Solution**: Check logs with `collab show <session-id> --logs` for details.
+
+## Performance
+
+- **Session startup**: <10s (agent spawning + MCP server)
+- **TUI update latency**: <100ms (event-driven updates)
+- **File write detection**: <10ms (fsnotify)
+- **Binary size**: <50MB (optimized build)
+
 ## License
 
-[Your License Here]
+MIT License
+
+Copyright (c) 2025
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ---
 
-*Generated by Sekkei 2025-11-23*
+**Built with**:
+- [Cobra](https://github.com/spf13/cobra) - CLI framework
+- [Bubbletea](https://github.com/charmbracelet/bubbletea) - TUI framework
+- [Lipgloss](https://github.com/charmbracelet/lipgloss) - Terminal styling
+- [claude-agent-sdk-go](https://github.com/connerohnesorge/claude-agent-sdk-go) - Agent SDK
+- [fsnotify](https://github.com/fsnotify/fsnotify) - File watching
+
+*Generated with Sekkei specification-driven development*
