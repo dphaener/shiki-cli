@@ -209,14 +209,14 @@ description: "Work package task list for multi-agent collaboration CLI"
 
 **Independent Test**: Spawn agents with mocked SDK client, execute turns with metrics collection, detect health check crashes within 1s, graceful shutdown with no orphaned processes.
 
-**Prompt**: `tasks/planned/WP06-agent-manager.md`
+**Prompt**: `tasks/done/WP06-agent-manager.md` ✅
 
 ### Included Subtasks
-- [ ] T031: Implement agent/agent.go (Agent struct wrapping SDK client, Start/Stop/IsHealthy methods)
-- [ ] T032: Implement agent/manager.go part 1 (SpawnAgent with SDK client creation, MCP connection setup)
-- [ ] T033: Implement agent/manager.go part 2 (StartTurn to send query and await completion, timeout enforcement)
-- [ ] T034: Implement agent/manager.go part 3 (health check goroutine to detect process crashes, emit events)
-- [ ] T035: Implement agent/metrics.go (token counting, cost calculation per model pricing, per-agent and per-turn tracking)
+- [X] T031: Implement agent/agent.go (Agent struct wrapping SDK client, Start/Stop/IsHealthy methods) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP06-agent-manager.md]
+- [X] T032: Implement agent/manager.go part 1 (SpawnAgent with SDK client creation, MCP connection setup) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP06-agent-manager.md]
+- [X] T033: Implement agent/manager.go part 2 (StartTurn to send query and await completion, timeout enforcement) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP06-agent-manager.md]
+- [X] T034: Implement agent/manager.go part 3 (health check goroutine to detect process crashes, emit events) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP06-agent-manager.md]
+- [X] T035: Implement agent/metrics.go (token counting, cost calculation per model pricing, per-agent and per-turn tracking) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP06-agent-manager.md]
 
 ### Implementation Notes
 1. Agent SDK environment: ANTHROPIC_API_KEY (required), MCP server endpoint, workspace directory
@@ -245,15 +245,15 @@ description: "Work package task list for multi-agent collaboration CLI"
 
 **Independent Test**: Execute session with alternating turns, persist state after each turn, detect completion with matching deliverables, pause/resume with exact state restoration, enforce max_turns limit.
 
-**Prompt**: `tasks/planned/WP07-orchestrator.md`
+**Prompt**: `tasks/done/WP07-orchestrator.md` ✅
 
 ### Included Subtasks
-- [ ] T036: Implement orchestrator/session.go (Session struct, NewSession from template, SaveState/LoadState for pause/resume)
-- [ ] T037: Implement orchestrator/turn.go (ExecuteTurn logic, timeout enforcement, metrics collection, event emission)
-- [ ] T038: Implement orchestrator/orchestrator.go part 1 (Run method with turn loop, agent alternation logic)
-- [ ] T039: Implement orchestrator/orchestrator.go part 2 (pause handling with SIGTERM/SIGINT, save state and graceful exit)
-- [ ] T040: Implement orchestrator/orchestrator.go part 3 (resume logic to restore state and continue from next turn)
-- [ ] T041: Implement orchestrator/completion.go (deliverable comparison, SessionCompleted vs continue if mismatch)
+- [X] T036: Implement orchestrator/session.go (Session struct, NewSession from template, SaveState/LoadState for pause/resume) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP07-orchestrator.md]
+- [X] T037: Implement orchestrator/turn.go (ExecuteTurn logic, timeout enforcement, metrics collection, event emission) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP07-orchestrator.md]
+- [X] T038: Implement orchestrator/orchestrator.go part 1 (Run method with turn loop, agent alternation logic) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP07-orchestrator.md]
+- [X] T039: Implement orchestrator/orchestrator.go part 2 (pause handling with SIGTERM/SIGINT, save state and graceful exit) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP07-orchestrator.md]
+- [X] T040: Implement orchestrator/orchestrator.go part 3 (resume logic to restore state and continue from next turn) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP07-orchestrator.md]
+- [X] T041: Implement orchestrator/completion.go (deliverable comparison, SessionCompleted vs continue if mismatch) ✅ [sekkei-specs/001-multi-agent-collaboration/tasks/done/WP07-orchestrator.md]
 
 ### Implementation Notes
 1. Turn alternation: agent1 → agent2 → agent1... (sequential, no concurrent execution per CON-003)
