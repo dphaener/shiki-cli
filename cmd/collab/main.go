@@ -13,6 +13,62 @@ var (
 	buildDate = "unknown"
 )
 
+func newCompletionCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "completion [bash|zsh|fish|powershell]",
+		Short: "Generate shell completion scripts",
+		Long: `Generate shell completion scripts for collab.
+
+To load completions:
+
+Bash:
+  $ source <(collab completion bash)
+  # To load completions for each session, execute once:
+  # Linux:
+  $ collab completion bash > /etc/bash_completion.d/collab
+  # macOS:
+  $ collab completion bash > $(brew --prefix)/etc/bash_completion.d/collab
+
+Zsh:
+  # If shell completion is not already enabled in your environment,
+  # you will need to enable it. Add to ~/.zshrc:
+  $ echo "autoload -U compinit; compinit" >> ~/.zshrc
+
+  # To load completions for each session, execute once:
+  $ collab completion zsh > "${fpath[1]}/_collab"
+  # You will need to start a new shell for this setup to take effect.
+
+Fish:
+  $ collab completion fish | source
+  # To load completions for each session, execute once:
+  $ collab completion fish > ~/.config/fish/completions/collab.fish
+
+PowerShell:
+  PS> collab completion powershell | Out-String | Invoke-Expression
+  # To load completions for every new session, run:
+  PS> collab completion powershell > collab.ps1
+  # and source this file from your PowerShell profile.
+`,
+		DisableFlagsInUseLine: true,
+		ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
+		Args:                  cobra.ExactValidArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			switch args[0] {
+			case "bash":
+				return cmd.Root().GenBashCompletion(os.Stdout)
+			case "zsh":
+				return cmd.Root().GenZshCompletion(os.Stdout)
+			case "fish":
+				return cmd.Root().GenFishCompletion(os.Stdout, true)
+			case "powershell":
+				return cmd.Root().GenPowerShellCompletionWithDesc(os.Stdout)
+			}
+			return nil
+		},
+	}
+	return cmd
+}
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "collab",
@@ -41,6 +97,7 @@ when both agents reach consensus on a deliverable.`,
 	rootCmd.AddCommand(cli.NewInitCommand())
 	rootCmd.AddCommand(cli.NewCleanCommand())
 	rootCmd.AddCommand(cli.NewVersionCommand(version, commit, buildDate))
+	rootCmd.AddCommand(newCompletionCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(2)
