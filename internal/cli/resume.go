@@ -72,6 +72,7 @@ sessions cannot be resumed.`,
 		},
 	}
 
+	cmd.Flags().StringP("workspace", "w", "", "Workspace directory (default: ~/.local/share/collab-cli/sessions)")
 	cmd.Flags().BoolVar(&watchMode, "watch", false, "Launch interactive TUI to monitor progress")
 
 	return cmd

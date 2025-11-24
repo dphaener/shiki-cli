@@ -68,6 +68,7 @@ Sessions can be filtered by status and output in different formats (table, json,
 		},
 	}
 
+	cmd.Flags().StringP("workspace", "w", "", "Workspace directory (default: ~/.local/share/collab-cli/sessions)")
 	cmd.Flags().StringVarP(&statusFilter, "status", "s", "all", "Filter by status (running|paused|completed|incomplete|error|all)")
 	cmd.Flags().StringVarP(&outputFormat, "format", "f", "table", "Output format (table|json|csv)")
 	cmd.Flags().IntVarP(&limit, "limit", "n", 50, "Maximum sessions to display")

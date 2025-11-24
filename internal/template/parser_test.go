@@ -30,7 +30,7 @@ Design a system.
 	assert.Equal(t, "Bob", tmpl.Agent2Name)
 	assert.Equal(t, 5, tmpl.MaxTurns)
 	assert.Equal(t, "# Task\n\nDesign a system.", tmpl.TaskBody)
-	assert.Equal(t, "claude-sonnet-4", tmpl.Agent1Model) // Default
+	assert.Equal(t, "claude-sonnet-4-20250514", tmpl.Agent1Model) // Default
 }
 
 func TestParseTemplateMalformedYAML(t *testing.T) {

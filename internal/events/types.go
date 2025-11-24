@@ -76,6 +76,12 @@ type (
 		Args     map[string]interface{}
 	}
 
+	AssistantMessagePayload struct {
+		AgentID string
+		Turn    int
+		Content string
+	}
+
 	CostThresholdExceededPayload struct {
 		AgentID     string // empty for session-level
 		CurrentCost float64
@@ -198,6 +204,15 @@ func NewToolInvoked(toolName, agentID, sessionID string, turn int, args map[stri
 		SessionID: sessionID,
 		Timestamp: time.Now(),
 		Payload:   ToolInvokedPayload{ToolName: toolName, AgentID: agentID, Turn: turn, Args: args},
+	}
+}
+
+func NewAssistantMessage(agentID, sessionID string, turn int, content string) Event {
+	return Event{
+		Type:      types.EventAssistantMessage,
+		SessionID: sessionID,
+		Timestamp: time.Now(),
+		Payload:   AssistantMessagePayload{AgentID: agentID, Turn: turn, Content: content},
 	}
 }
 

@@ -22,31 +22,57 @@ func (m Model) View() string {
 	statusBarHeight := 1
 	paneHeight := m.height - headerHeight - statusBarHeight
 
+	// Render agent output panes horizontally
+	numAgents := len(m.activeAgents)
+	if numAgents == 0 {
+		numAgents = 1 // Prevent division by zero
+	}
+	agentPaneWidth := m.width / numAgents
+
+	var agentPanes []string
+	for i, agentID := range m.activeAgents {
+		if agentState, exists := m.agentOutputs[agentID]; exists {
+			isActive := i == m.selectedAgent
+			pane := components.RenderAgentOutput(*agentState, agentPaneWidth, paneHeight, isActive)
+			agentPanes = append(agentPanes, pane)
+		}
+	}
+
+	// Join agent panes horizontally
+	var panes string
+	if len(agentPanes) > 0 {
+		panes = lipgloss.JoinHorizontal(lipgloss.Top, agentPanes...)
+	} else {
+		// Fallback if no agents
+		panes = "No active agents"
+	}
+
+	// OLD PANE RENDERING (Preserved for future use)
 	// Split width for two panes (50/50 split)
-	leftWidth := m.width / 2
-	rightWidth := m.width - leftWidth
-
+	// leftWidth := m.width / 2
+	// rightWidth := m.width - leftWidth
+	//
 	// Render left pane (turn history)
-	leftPane := components.RenderTurnList(
-		m.turnHistory,
-		m.selectedTurn,
-		leftWidth,
-		paneHeight,
-		m.selectedPane == "turns",
-	)
-
+	// leftPane := components.RenderTurnList(
+	// 	m.turnHistory,
+	// 	m.selectedTurn,
+	// 	leftWidth,
+	// 	paneHeight,
+	// 	m.selectedPane == "turns",
+	// )
+	//
 	// Render right pane (file viewer)
-	rightPane := components.RenderFileViewer(
-		m.fileContent,
-		m.currentFile,
-		rightWidth,
-		paneHeight,
-		m.scrollOffset,
-		m.selectedPane == "file",
-	)
-
+	// rightPane := components.RenderFileViewer(
+	// 	m.fileContent,
+	// 	m.currentFile,
+	// 	rightWidth,
+	// 	paneHeight,
+	// 	m.scrollOffset,
+	// 	m.selectedPane == "file",
+	// )
+	//
 	// Join panes horizontally
-	panes := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
+	// panes := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 
 	// Get most recent tool activity
 	recentTool := ""
@@ -57,8 +83,8 @@ func (m Model) View() string {
 
 	// Render status bar
 	statusBar := components.RenderStatusBar(
-		len(m.fileList),
-		m.selectedPane,
+		len(m.activeAgents),
+		m.selectedAgent,
 		m.width,
 		recentTool,
 	)

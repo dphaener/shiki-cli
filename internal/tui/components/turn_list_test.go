@@ -25,7 +25,7 @@ func TestRenderTurnList_SingleTurn(t *testing.T) {
 			Status:     types.TurnCompleted,
 			TokensUsed: 1000,
 			Cost:       0.05,
-			DurationMS: 1500,
+			DurationMs: 1500,
 		},
 	}
 
@@ -39,9 +39,9 @@ func TestRenderTurnList_SingleTurn(t *testing.T) {
 
 func TestRenderTurnList_MultipleTurns(t *testing.T) {
 	turns := []types.Turn{
-		{Number: 1, AgentID: "agent1", Status: types.TurnCompleted, Cost: 0.01, DurationMS: 1000},
-		{Number: 2, AgentID: "agent2", Status: types.TurnCompleted, Cost: 0.02, DurationMS: 2000},
-		{Number: 3, AgentID: "agent1", Status: types.TurnInProgress, Cost: 0.0, DurationMS: 500},
+		{Number: 1, AgentID: "agent1", Status: types.TurnCompleted, Cost: 0.01, DurationMs: 1000},
+		{Number: 2, AgentID: "agent2", Status: types.TurnCompleted, Cost: 0.02, DurationMs: 2000},
+		{Number: 3, AgentID: "agent1", Status: types.TurnInProgress, Cost: 0.0, DurationMs: 500},
 	}
 
 	result := RenderTurnList(turns, 1, 40, 20, false)
@@ -79,7 +79,7 @@ func TestRenderTurnList_Scrolling(t *testing.T) {
 			AgentID:    "agent1",
 			Status:     types.TurnCompleted,
 			Cost:       0.01,
-			DurationMS: 1000,
+			DurationMs: 1000,
 		})
 	}
 
@@ -117,7 +117,7 @@ func TestRenderTurnList_SelectedTurn(t *testing.T) {
 
 func TestRenderTurnList_DifferentSizes(t *testing.T) {
 	turns := []types.Turn{
-		{Number: 1, AgentID: "agent1", Status: types.TurnCompleted, Cost: 0.01, DurationMS: 1000},
+		{Number: 1, AgentID: "agent1", Status: types.TurnCompleted, Cost: 0.01, DurationMs: 1000},
 	}
 
 	sizes := []struct {
@@ -146,7 +146,7 @@ func TestFormatTurnLine_Completed(t *testing.T) {
 		Status:     types.TurnCompleted,
 		TokensUsed: 1500,
 		Cost:       0.075,
-		DurationMS: 2500,
+		DurationMs: 2500,
 	}
 
 	line := formatTurnLine(turn, false, 50)
@@ -252,7 +252,7 @@ func TestFormatTurnLine_DurationFormatting(t *testing.T) {
 				Number:     1,
 				AgentID:    "agent1",
 				Status:     types.TurnCompleted,
-				DurationMS: tt.durationMS,
+				DurationMs: tt.durationMS,
 			}
 
 			line := formatTurnLine(turn, false, 50)

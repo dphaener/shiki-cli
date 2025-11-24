@@ -80,6 +80,7 @@ The session runs until both agents submit matching deliverables or max turns is 
 		},
 	}
 
+	cmd.Flags().StringP("workspace", "w", "", "Workspace directory (default: ~/.local/share/collab-cli/sessions)")
 	cmd.Flags().BoolVar(&watchMode, "watch", false, "Launch interactive TUI to monitor progress")
 	cmd.Flags().StringVar(&sessionID, "session-id", "", "Override automatic session ID")
 

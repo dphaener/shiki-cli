@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/darinhaener/collab/internal/events"
+	"github.com/darinhaener/collab/internal/tui/components"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -47,30 +48,36 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "up", "k":
-		// Navigate up in active pane
-		if m.selectedPane == "turns" && m.selectedTurn > 0 {
-			m.selectedTurn--
-			m.scrollOffset = max(0, m.scrollOffset-1)
-		} else if m.selectedPane == "file" && m.scrollOffset > 0 {
-			m.scrollOffset--
+		// Scroll up in selected agent pane
+		if m.selectedAgent >= 0 && m.selectedAgent < len(m.activeAgents) {
+			agentID := m.activeAgents[m.selectedAgent]
+			if agentState, exists := m.agentOutputs[agentID]; exists {
+				if agentState.ScrollOffset > 0 {
+					agentState.ScrollOffset--
+				}
+			}
 		}
 
 	case "down", "j":
-		// Navigate down in active pane
-		if m.selectedPane == "turns" && m.selectedTurn < len(m.turnHistory)-1 {
-			m.selectedTurn++
-			m.scrollOffset = min(m.scrollOffset+1, len(m.turnHistory)-1)
-		} else if m.selectedPane == "file" {
-			m.scrollOffset++
+		// Scroll down in selected agent pane
+		if m.selectedAgent >= 0 && m.selectedAgent < len(m.activeAgents) {
+			agentID := m.activeAgents[m.selectedAgent]
+			if agentState, exists := m.agentOutputs[agentID]; exists {
+				agentState.ScrollOffset++
+			}
 		}
 
 	case "left", "h":
-		// Switch to turns pane
-		m.selectedPane = "turns"
+		// Switch to previous agent pane
+		if m.selectedAgent > 0 {
+			m.selectedAgent--
+		}
 
 	case "right", "l":
-		// Switch to file pane
-		m.selectedPane = "file"
+		// Switch to next agent pane
+		if m.selectedAgent < len(m.activeAgents)-1 {
+			m.selectedAgent++
+		}
 
 	case "tab":
 		// Cycle through files
@@ -135,6 +142,12 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 		m.selectedTurn = len(m.turnHistory) - 1
 		m.session.CurrentTurn = payload.Turn.Number
 
+		// Update agent state
+		if agentState, exists := m.agentOutputs[payload.AgentID]; exists {
+			agentState.Status = types.TurnInProgress
+			agentState.CurrentTurn = payload.Turn.Number
+		}
+
 	case types.EventTurnCompleted:
 		payload := event.Payload.(events.TurnCompletedPayload)
 		// Update turn in history
@@ -148,6 +161,13 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 		m.session.TotalCost += payload.Turn.Cost
 		m.session.TotalTokens += payload.Turn.TokensUsed
 
+		// Update agent state
+		if agentState, exists := m.agentOutputs[payload.Turn.AgentID]; exists {
+			agentState.Status = types.TurnCompleted
+			agentState.TotalCost += payload.Turn.Cost
+			agentState.TotalTokens += payload.Turn.TokensUsed
+		}
+
 	case types.EventTurnError:
 		payload := event.Payload.(events.TurnErrorPayload)
 		// Update turn with error
@@ -156,6 +176,11 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 				m.turnHistory[i] = *payload.Turn
 				break
 			}
+		}
+
+		// Update agent state
+		if agentState, exists := m.agentOutputs[payload.Turn.AgentID]; exists {
+			agentState.Status = types.TurnError
 		}
 
 	case types.EventFileUpdated:
@@ -178,6 +203,32 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 		m.toolActivity = append(m.toolActivity, activity)
 		if len(m.toolActivity) > 50 {
 			m.toolActivity = m.toolActivity[len(m.toolActivity)-50:]
+		}
+
+		// Also add to agent output pane
+		if agentState, exists := m.agentOutputs[payload.AgentID]; exists {
+			entry := components.OutputEntry{
+				Type:      components.OutputTypeToolUse,
+				Content:   payload.ToolName,
+				Timestamp: event.Timestamp.Format("15:04:05"),
+			}
+			agentState.Outputs = append(agentState.Outputs, entry)
+			// Set scroll offset to end to trigger auto-scroll to bottom
+			agentState.ScrollOffset = len(agentState.Outputs)
+		}
+
+	case types.EventAssistantMessage:
+		payload := event.Payload.(events.AssistantMessagePayload)
+		// Add assistant message to agent output pane
+		if agentState, exists := m.agentOutputs[payload.AgentID]; exists {
+			entry := components.OutputEntry{
+				Type:      components.OutputTypeMessage,
+				Content:   payload.Content,
+				Timestamp: event.Timestamp.Format("15:04:05"),
+			}
+			agentState.Outputs = append(agentState.Outputs, entry)
+			// Set scroll offset to end to trigger auto-scroll to bottom
+			agentState.ScrollOffset = len(agentState.Outputs)
 		}
 
 	case types.EventSessionCompleted:

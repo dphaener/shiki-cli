@@ -261,9 +261,9 @@ func TestGetTools(t *testing.T) {
 	bus := events.NewEventBus(100)
 	defer bus.Shutdown()
 
-	server := NewServer(wsDir, "test-session-5", bus)
+	tb := NewToolsBuilder(wsDir, "test-session-5", bus)
 
-	tools := server.GetTools()
+	tools := tb.CreateTools("test-agent")
 	assert.Len(t, tools, 7, "Should have exactly 7 tools")
 
 	toolNames := []string{
@@ -277,8 +277,8 @@ func TestGetTools(t *testing.T) {
 	}
 
 	for i, tool := range tools {
-		assert.Equal(t, toolNames[i], tool.Name)
-		assert.NotEmpty(t, tool.Description)
-		assert.NotNil(t, tool.InputSchema)
+		assert.Equal(t, toolNames[i], tool.Name())
+		assert.NotEmpty(t, tool.Description())
+		assert.NotNil(t, tool.InputSchema())
 	}
 }

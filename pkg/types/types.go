@@ -40,6 +40,7 @@ const (
 	EventMessageSent            EventType = "message.sent"
 	EventFileUpdated            EventType = "file.updated"
 	EventToolInvoked            EventType = "tool.invoked"
+	EventAssistantMessage       EventType = "assistant.message"
 	EventCostThresholdExceeded  EventType = "cost.threshold_exceeded"
 )
 

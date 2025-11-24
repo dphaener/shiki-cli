@@ -83,6 +83,7 @@ Can filter by age or status. By default, prompts for confirmation before deletin
 		},
 	}
 
+	cmd.Flags().StringP("workspace", "w", "", "Workspace directory (default: ~/.local/share/collab-cli/sessions)")
 	cmd.Flags().StringVar(&olderThan, "older-than", "", "Delete sessions older than duration (e.g., '7d', '24h')")
 	cmd.Flags().StringVarP(&status, "status", "s", "", "Delete sessions with specific status")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Skip confirmation prompt")

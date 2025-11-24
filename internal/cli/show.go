@@ -78,6 +78,7 @@ Can optionally show messages, deliverable content, logs, and shared context.`,
 		},
 	}
 
+	cmd.Flags().StringP("workspace", "w", "", "Workspace directory (default: ~/.local/share/collab-cli/sessions)")
 	cmd.Flags().BoolVarP(&showMessages, "messages", "m", false, "Show all messages between agents")
 	cmd.Flags().BoolVarP(&showDeliverable, "deliverable", "d", false, "Show final deliverable content")
 	cmd.Flags().BoolVarP(&showLogs, "logs", "l", false, "Show orchestrator logs")

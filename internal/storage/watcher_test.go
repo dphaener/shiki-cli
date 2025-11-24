@@ -10,12 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
 func TestWatcherBasicFileChange(t *testing.T) {
 	wsDir := t.TempDir()
-	eventChan := make(chan types.Event, 100)
+	eventChan := make(chan events.Event, 100)
 
 	watcher, err := NewWatcher(wsDir, eventChan)
 	require.NoError(t, err)
@@ -39,8 +40,8 @@ func TestWatcherBasicFileChange(t *testing.T) {
 	case event := <-eventChan:
 		assert.Equal(t, types.EventFileUpdated, event.Type)
 		assert.Equal(t, "test-session", event.SessionID)
-		payload := event.Payload.(map[string]interface{})
-		assert.Contains(t, payload["path"], "test.txt")
+		payload := event.Payload.(events.FileUpdatedPayload)
+		assert.Contains(t, payload.Path, "test.txt")
 	case <-time.After(1 * time.Second):
 		t.Fatal("timeout waiting for file change event")
 	}
@@ -48,7 +49,7 @@ func TestWatcherBasicFileChange(t *testing.T) {
 
 func TestWatcherIgnoresTempFiles(t *testing.T) {
 	wsDir := t.TempDir()
-	eventChan := make(chan types.Event, 100)
+	eventChan := make(chan events.Event, 100)
 
 	watcher, err := NewWatcher(wsDir, eventChan)
 	require.NoError(t, err)
@@ -81,7 +82,7 @@ func TestWatcherSubdirectories(t *testing.T) {
 	err := os.MkdirAll(messagesDir, 0o700)
 	require.NoError(t, err)
 
-	eventChan := make(chan types.Event, 100)
+	eventChan := make(chan events.Event, 100)
 
 	watcher, err := NewWatcher(wsDir, eventChan)
 	require.NoError(t, err)
@@ -103,8 +104,8 @@ func TestWatcherSubdirectories(t *testing.T) {
 	select {
 	case event := <-eventChan:
 		assert.Equal(t, types.EventFileUpdated, event.Type)
-		payload := event.Payload.(map[string]interface{})
-		assert.Contains(t, payload["path"], "message.md")
+		payload := event.Payload.(events.FileUpdatedPayload)
+		assert.Contains(t, payload.Path, "message.md")
 	case <-time.After(1 * time.Second):
 		t.Fatal("timeout waiting for subdirectory file change event")
 	}
@@ -112,7 +113,7 @@ func TestWatcherSubdirectories(t *testing.T) {
 
 func TestWatcherClose(t *testing.T) {
 	wsDir := t.TempDir()
-	eventChan := make(chan types.Event, 100)
+	eventChan := make(chan events.Event, 100)
 
 	watcher, err := NewWatcher(wsDir, eventChan)
 	require.NoError(t, err)
@@ -132,7 +133,7 @@ func TestWatcherLatency(t *testing.T) {
 	}
 
 	wsDir := t.TempDir()
-	eventChan := make(chan types.Event, 100)
+	eventChan := make(chan events.Event, 100)
 
 	watcher, err := NewWatcher(wsDir, eventChan)
 	require.NoError(t, err)
@@ -180,7 +181,7 @@ func TestWatcherLatency(t *testing.T) {
 
 func BenchmarkWatcherLatency(b *testing.B) {
 	wsDir := b.TempDir()
-	eventChan := make(chan types.Event, 1000)
+	eventChan := make(chan events.Event, 1000)
 
 	watcher, _ := NewWatcher(wsDir, eventChan)
 	defer func() { _ = watcher.Close() }()

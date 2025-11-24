@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/darinhaener/collab/internal/events"
+	"github.com/darinhaener/collab/internal/tui/components"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -28,6 +29,11 @@ type Model struct {
 	eventSub     *events.Subscriber
 	workspaceDir string
 	toolActivity []ToolActivity // Recent tool invocations
+
+	// Agent output tracking
+	agentOutputs  map[string]*components.AgentOutputState // Agent ID -> output state
+	activeAgents  []string                                // List of agent IDs in display order
+	selectedAgent int                                     // Index of selected agent pane
 
 	// UI state
 	selectedTurn int
@@ -53,6 +59,7 @@ func NewModel(session *types.Session, bus *events.EventBus) Model {
 		types.EventTurnError,
 		types.EventFileUpdated,
 		types.EventToolInvoked,
+		types.EventAssistantMessage,
 		types.EventSessionCompleted,
 		types.EventSessionPaused,
 		types.EventSessionError,
@@ -67,17 +74,45 @@ func NewModel(session *types.Session, bus *events.EventBus) Model {
 		currentFile = fileList[0]
 	}
 
+	// Initialize agent output states
+	agentOutputs := make(map[string]*components.AgentOutputState)
+	activeAgents := []string{session.Agent1.ID, session.Agent2.ID}
+
+	// Create initial state for each agent
+	agentOutputs[session.Agent1.ID] = &components.AgentOutputState{
+		AgentID:      session.Agent1.ID,
+		Status:       types.TurnCompleted,
+		CurrentTurn:  0,
+		TotalCost:    session.Agent1.TotalCost,
+		TotalTokens:  session.Agent1.TotalTokens,
+		Outputs:      make([]components.OutputEntry, 0),
+		ScrollOffset: 0,
+	}
+
+	agentOutputs[session.Agent2.ID] = &components.AgentOutputState{
+		AgentID:      session.Agent2.ID,
+		Status:       types.TurnCompleted,
+		CurrentTurn:  0,
+		TotalCost:    session.Agent2.TotalCost,
+		TotalTokens:  session.Agent2.TotalTokens,
+		Outputs:      make([]components.OutputEntry, 0),
+		ScrollOffset: 0,
+	}
+
 	return Model{
-		session:      session,
-		turnHistory:  session.TurnHistory,
-		currentFile:  currentFile,
-		fileList:     fileList,
-		eventSub:     sub,
-		workspaceDir: session.WorkspaceDir,
-		toolActivity: make([]ToolActivity, 0),
-		selectedPane: "turns",
-		selectedTurn: len(session.TurnHistory) - 1,
-		selectedFile: indexOf(fileList, currentFile),
+		session:       session,
+		turnHistory:   session.TurnHistory,
+		currentFile:   currentFile,
+		fileList:      fileList,
+		eventSub:      sub,
+		workspaceDir:  session.WorkspaceDir,
+		toolActivity:  make([]ToolActivity, 0),
+		agentOutputs:  agentOutputs,
+		activeAgents:  activeAgents,
+		selectedAgent: 0,
+		selectedPane:  "turns",
+		selectedTurn:  len(session.TurnHistory) - 1,
+		selectedFile:  indexOf(fileList, currentFile),
 	}
 }
 

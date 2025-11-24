@@ -8,8 +8,8 @@ import (
 func TestDefault(t *testing.T) {
 	cfg := Default()
 
-	if cfg.DefaultModel != "claude-sonnet-4" {
-		t.Errorf("DefaultModel = %s, want claude-sonnet-4", cfg.DefaultModel)
+	if cfg.DefaultModel != "claude-sonnet-4-20250514" {
+		t.Errorf("DefaultModel = %s, want claude-sonnet-4-20250514", cfg.DefaultModel)
 	}
 	if cfg.TurnTimeoutSec != 300 {
 		t.Errorf("TurnTimeoutSec = %d, want 300", cfg.TurnTimeoutSec)

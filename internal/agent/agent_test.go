@@ -108,11 +108,9 @@ func TestAgent_Start_Integration(t *testing.T) {
 	agent := NewAgent(cfg)
 
 	ctx := context.Background()
-	mcpCmd := "echo" // Mock MCP server command
-	mcpArgs := []string{"test"}
 	apiKey := "test-api-key"
 
-	err := agent.Start(ctx, mcpCmd, mcpArgs, apiKey)
+	err := agent.Start(ctx, nil, apiKey, cfg.ID)
 	require.NoError(t, err)
 
 	defer func() {

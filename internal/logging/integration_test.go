@@ -39,7 +39,7 @@ func TestEventBusLoggerIntegration(t *testing.T) {
 	turn := &types.Turn{
 		Number:     1,
 		AgentID:    "agent-1",
-		DurationMS: 100,
+		DurationMs: 100,
 	}
 
 	// Publish various events
@@ -70,7 +70,7 @@ func TestEventBusLoggerIntegration(t *testing.T) {
 	require.NoError(t, err, "log entry should be valid JSON")
 
 	assert.Equal(t, "info", entry["level"])
-	assert.Contains(t, entry["message"], "SessionCreated")
+	assert.Contains(t, entry["message"], "session.created")
 
 	// Verify all entries have required fields
 	for i, line := range lines {
@@ -125,7 +125,7 @@ func TestEventLoggerFileAppend(t *testing.T) {
 
 	content := string(data)
 	assert.Contains(t, content, "existing content", "should preserve existing content")
-	assert.Contains(t, content, "SessionCreated", "should append new content")
+	assert.Contains(t, content, "session.created", "should append new content")
 }
 
 func TestEventLoggerGracefulShutdown(t *testing.T) {

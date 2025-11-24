@@ -38,7 +38,7 @@ func mockSession(workspaceDir string) *types.Session {
 				Status:     types.TurnCompleted,
 				TokensUsed: 500,
 				Cost:       0.025,
-				DurationMS: 1500,
+				DurationMs: 1500,
 			},
 		},
 	}

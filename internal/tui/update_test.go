@@ -271,7 +271,7 @@ func TestUpdate_EventTurnCompleted(t *testing.T) {
 		Status:     types.TurnCompleted,
 		TokensUsed: 1000,
 		Cost:       0.05,
-		DurationMS: 2000,
+		DurationMs: 2000,
 	}
 
 	event := events.Event{

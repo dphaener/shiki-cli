@@ -21,12 +21,12 @@ var (
 )
 
 // RenderStatusBar renders the bottom status bar with keybindings
-func RenderStatusBar(fileCount int, selectedPane string, width int, recentTool string) string {
-	// File count
-	files := fmt.Sprintf("Files: %d", fileCount)
+func RenderStatusBar(agentCount int, selectedAgentIndex int, width int, recentTool string) string {
+	// Agent count
+	agents := fmt.Sprintf("Agents: %d", agentCount)
 
-	// Current pane indicator
-	paneIndicator := fmt.Sprintf("Pane: %s", selectedPane)
+	// Current agent indicator
+	agentIndicator := fmt.Sprintf("Agent: %d/%d", selectedAgentIndex+1, agentCount)
 
 	// Recent tool activity
 	toolActivity := ""
@@ -36,11 +36,9 @@ func RenderStatusBar(fileCount int, selectedPane string, width int, recentTool s
 
 	// Keybindings help
 	keys := []string{
-		"↑/↓:Navigate",
-		"←/→:Switch",
-		"Tab:File",
+		"↑/↓:Scroll",
+		"←/→:Switch Agent",
 		"q:Quit",
-		"?:Help",
 	}
 
 	keysStr := lipgloss.JoinHorizontal(lipgloss.Left,
@@ -49,14 +47,10 @@ func RenderStatusBar(fileCount int, selectedPane string, width int, recentTool s
 		statusBarKeyStyle.Render(keys[1]),
 		" ",
 		statusBarKeyStyle.Render(keys[2]),
-		" ",
-		statusBarKeyStyle.Render(keys[3]),
-		" ",
-		statusBarKeyStyle.Render(keys[4]),
 	)
 
 	// Build status bar layout
-	leftParts := []string{files, " │ ", paneIndicator}
+	leftParts := []string{agents, " │ ", agentIndicator}
 	if toolActivity != "" {
 		leftParts = append(leftParts, " │ ", toolActivity)
 	}
