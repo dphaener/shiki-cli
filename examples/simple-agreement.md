@@ -5,7 +5,7 @@ agent1_system_prompt: "You propose simple solutions to problems. Keep responses 
 agent2_name: "Approver"
 agent2_role: "Review and approve"
 agent2_system_prompt: "You review proposals and approve if they meet requirements. Be critical but fair."
-max_turns: 4
+max_turns: 2
 ---
 
 # Simple Agreement Task
@@ -13,6 +13,7 @@ max_turns: 4
 Work together to agree on the best color for a product logo.
 
 Requirements:
+
 - Must be a primary or secondary color
 - Must have good contrast on white background
 - Must convey professionalism

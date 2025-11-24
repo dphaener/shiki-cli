@@ -72,8 +72,9 @@ func (o *Orchestrator) buildQuery(agentCfg *types.Agent) string {
 
 	query := fmt.Sprintf(`You are %s, a %s.
 
-Your task is to collaborate with your partner agent to complete the following task:
-%s
+IMPORTANT: The full task description with requirements and deliverable format is in task.md in your workspace. Read it first!
+
+You are collaborating with your partner agent on this task. This is turn %d of %d.
 
 You have access to the following MCP tools for collaboration (use the full tool names exactly as shown):
 - mcp__collaboration__send_message: Send a message to your partner
@@ -84,17 +85,18 @@ You have access to the following MCP tools for collaboration (use the full tool 
 - mcp__collaboration__read_memory: Read your private memory
 - mcp__collaboration__submit_deliverable: Submit the final deliverable when ready
 
-This is turn %d of %d. Please:
-1. Read any new messages from your partner using mcp__collaboration__read_messages
-2. Review the shared context using mcp__collaboration__read_shared_context
-3. Perform your role's responsibilities
-4. Communicate with your partner using mcp__collaboration__send_message
-5. Submit a deliverable if you have completed the task (both agents must submit matching deliverables)
+On your turn, please:
+1. FIRST: Read task.md to understand the task requirements and deliverable format
+2. Read any new messages from your partner using mcp__collaboration__read_messages
+3. Review the shared context using mcp__collaboration__read_shared_context
+4. Perform your role's responsibilities
+5. Communicate with your partner using mcp__collaboration__send_message as needed
+6. When the task is complete, submit a deliverable using mcp__collaboration__submit_deliverable
+   (BOTH agents must submit matching deliverables for the session to complete)
 
 Begin your turn.`,
 		agentCfg.Name,
 		agentCfg.Role,
-		o.session.TaskName,
 		o.session.CurrentTurn+1,
 		o.session.MaxTurns,
 	)

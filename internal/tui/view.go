@@ -13,6 +13,19 @@ func (m Model) View() string {
 		return "Initializing TUI..."
 	}
 
+	// Route to appropriate view based on view mode
+	switch m.viewMode {
+	case ViewModeCompletion:
+		return m.renderCompletionView()
+	case ViewModeAgents:
+		fallthrough
+	default:
+		return m.renderAgentView()
+	}
+}
+
+// renderAgentView renders the agent conversation view (original view)
+func (m Model) renderAgentView() string {
 	// Render header (1 line + padding)
 	header := components.RenderHeader(m.session, m.width)
 
@@ -97,4 +110,18 @@ func (m Model) View() string {
 	)
 
 	return view
+}
+
+// renderCompletionView renders the completion view showing the deliverable
+func (m Model) renderCompletionView() string {
+	// Create completion view state
+	state := components.CompletionViewState{
+		Session:            m.session,
+		DeliverableContent: m.deliverableContent,
+		DeliverablePath:    m.deliverablePath,
+		ScrollOffset:       m.scrollOffset,
+	}
+
+	// Render the completion view
+	return components.RenderCompletionView(state, m.width, m.height)
 }

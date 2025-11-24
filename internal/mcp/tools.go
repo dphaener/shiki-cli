@@ -296,18 +296,27 @@ func (tb *ToolsBuilder) createSubmitDeliverableTool(agentID string) claude.McpTo
 
 			notes, _ := args["notes"].(string)
 
-			deliverableFile := filepath.Join(tb.workspaceDir, "deliverable.md")
+			// Determine agent-specific file name
+			deliverableFileName := "agent_1_deliverable.md"
+			if strings.Contains(agentID, "agent_2") {
+				deliverableFileName = "agent_2_deliverable.md"
+			}
 
-			// For now, simple implementation - just write the deliverable
-			// TODO: Track approvals from both agents
-			deliverable := fmt.Sprintf("# Deliverable\n\nSubmitted by: %s\nTime: %s\n\n%s\n\n## Notes\n\n%s\n",
-				agentID, time.Now().Format(time.RFC3339), content, notes)
+			deliverableFile := filepath.Join(tb.workspaceDir, deliverableFileName)
 
-			if err := os.WriteFile(deliverableFile, []byte(deliverable), 0600); err != nil {
+			// Write just the content to enable byte-for-byte comparison
+			// Metadata would differ between agents and prevent matching
+			if err := os.WriteFile(deliverableFile, []byte(content), 0600); err != nil {
 				return errorResult(fmt.Sprintf("Failed to write deliverable: %v", err)), nil
 			}
 
-			return successResult("Deliverable submitted successfully"), nil
+			// Also write metadata to a separate file for reference
+			metadataFile := filepath.Join(tb.workspaceDir, fmt.Sprintf("%s_metadata.json", strings.TrimSuffix(deliverableFileName, ".md")))
+			metadata := fmt.Sprintf(`{"agent": "%s", "timestamp": "%s", "notes": "%s"}`,
+				agentID, time.Now().Format(time.RFC3339), notes)
+			_ = os.WriteFile(metadataFile, []byte(metadata), 0600) // Best effort, ignore errors
+
+			return successResult("Deliverable submitted successfully. When both agents submit matching deliverables, the session will complete."), nil
 		},
 	)
 }

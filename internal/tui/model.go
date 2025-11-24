@@ -12,6 +12,14 @@ import (
 	"github.com/darinhaener/collab/pkg/types"
 )
 
+// ViewMode represents the current view state of the TUI
+type ViewMode string
+
+const (
+	ViewModeAgents     ViewMode = "agents"
+	ViewModeCompletion ViewMode = "completion"
+)
+
 // ToolActivity represents a tool invocation for display
 type ToolActivity struct {
 	ToolName  string
@@ -34,6 +42,11 @@ type Model struct {
 	agentOutputs  map[string]*components.AgentOutputState // Agent ID -> output state
 	activeAgents  []string                                // List of agent IDs in display order
 	selectedAgent int                                     // Index of selected agent pane
+
+	// View state
+	viewMode           ViewMode
+	deliverableContent string
+	deliverablePath    string
 
 	// UI state
 	selectedTurn int
@@ -110,6 +123,7 @@ func NewModel(session *types.Session, bus *events.EventBus) Model {
 		agentOutputs:  agentOutputs,
 		activeAgents:  activeAgents,
 		selectedAgent: 0,
+		viewMode:      ViewModeAgents,
 		selectedPane:  "turns",
 		selectedTurn:  len(session.TurnHistory) - 1,
 		selectedFile:  indexOf(fileList, currentFile),
@@ -151,6 +165,34 @@ func loadFileContent(workspaceDir, filename string) tea.Cmd {
 		return fileContentMsg{
 			content:  string(content),
 			filename: filename,
+		}
+	}
+}
+
+// loadDeliverableContent loads deliverable content from the specified path
+func loadDeliverableContent(path string) tea.Cmd {
+	return func() tea.Msg {
+		if path == "" {
+			return deliverableContentMsg{
+				content: "",
+				path:    "",
+				err:     nil,
+			}
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return deliverableContentMsg{
+				content: "",
+				path:    path,
+				err:     err,
+			}
+		}
+
+		return deliverableContentMsg{
+			content: string(content),
+			path:    path,
+			err:     nil,
 		}
 	}
 }
@@ -214,4 +256,10 @@ type eventMsg struct {
 type fileContentMsg struct {
 	content  string
 	filename string
+}
+
+type deliverableContentMsg struct {
+	content string
+	path    string
+	err     error
 }

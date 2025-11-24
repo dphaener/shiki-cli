@@ -29,7 +29,7 @@ func TestView_Standard80x24(t *testing.T) {
 
 	// Verify all major sections present
 	assert.Contains(t, view, "Session:")
-	assert.Contains(t, view, "Turn History")
+	assert.Contains(t, view, "Agent:") // Agent panes instead of turn history
 	assert.NotEmpty(t, view)
 
 	// View should not be empty
@@ -49,8 +49,8 @@ func TestView_Components(t *testing.T) {
 	assert.Contains(t, view, "Session:")
 	assert.Contains(t, view, session.TaskName)
 
-	// Turn history should be visible
-	assert.Contains(t, view, "Turn History")
+	// Agent panes should be visible
+	assert.Contains(t, view, "Agent:")
 
 	// Status bar should be included
 	// Note: Status bar content depends on component implementation
@@ -95,8 +95,8 @@ func TestView_SplitPanes(t *testing.T) {
 	view := model.View()
 
 	// Both panes should be visible
-	assert.Contains(t, view, "Turn History") // Left pane title
-	// Right pane should show file viewer content
+	assert.Contains(t, view, "Agent:") // Agent pane header
+	// Agent panes should be rendered
 	assert.NotEmpty(t, view)
 }
 
@@ -106,19 +106,21 @@ func TestView_PaneActivation(t *testing.T) {
 	model.width = 80
 	model.height = 24
 
-	// Test with turns pane active
-	model.selectedPane = "turns"
-	viewTurns := model.View()
-	assert.NotEmpty(t, viewTurns)
+	// Test with agent 0 active
+	model.selectedAgent = 0
+	viewAgent0 := model.View()
+	assert.NotEmpty(t, viewAgent0)
+	assert.Contains(t, viewAgent0, "Agent:")
 
-	// Test with file pane active
-	model.selectedPane = "file"
-	viewFile := model.View()
-	assert.NotEmpty(t, viewFile)
+	// Test with agent 1 active
+	model.selectedAgent = 1
+	viewAgent1 := model.View()
+	assert.NotEmpty(t, viewAgent1)
+	assert.Contains(t, viewAgent1, "Agent:")
 
-	// Views should be different (different border styles for active pane)
+	// Views should be different (different border styles for active agent pane)
 	// This is a basic check - detailed styling is tested in component tests
-	assert.NotEqual(t, viewTurns, viewFile)
+	assert.NotEqual(t, viewAgent0, viewAgent1)
 }
 
 func TestView_WithContent(t *testing.T) {
@@ -149,7 +151,7 @@ func TestView_NoTurns(t *testing.T) {
 
 	// Should render gracefully with no turns
 	assert.NotEmpty(t, view)
-	assert.Contains(t, view, "Turn History")
+	assert.Contains(t, view, "Agent:")
 }
 
 func TestView_ManyTurns(t *testing.T) {
@@ -173,7 +175,7 @@ func TestView_ManyTurns(t *testing.T) {
 
 	// Should render without issue
 	assert.NotEmpty(t, view)
-	assert.Contains(t, view, "Turn History")
+	assert.Contains(t, view, "Agent:")
 }
 
 func TestView_Snapshot(t *testing.T) {
@@ -189,7 +191,7 @@ func TestView_Snapshot(t *testing.T) {
 	// Snapshot assertions - verify key elements are present
 	assert.Contains(t, view, "Session:", "Header should contain session label")
 	assert.Contains(t, view, session.TaskName, "Header should contain task name")
-	assert.Contains(t, view, "Turn History", "Should show turn history pane")
+	assert.Contains(t, view, "Agent:", "Should show agent panes")
 
 	// Basic structure validation
 	assert.NotEmpty(t, view, "View should not be empty")

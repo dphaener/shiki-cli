@@ -52,85 +52,89 @@ func TestUpdate_KeyboardCtrlC(t *testing.T) {
 func TestUpdate_KeyboardUpDown(t *testing.T) {
 	tmpDir := t.TempDir()
 	session := mockSession(tmpDir)
-	// Add more turns
-	session.TurnHistory = append(session.TurnHistory,
-		types.Turn{Number: 2, AgentID: "agent2", Status: types.TurnCompleted},
-		types.Turn{Number: 3, AgentID: "agent1", Status: types.TurnCompleted},
-	)
 
 	model := NewModel(session, mockEventBus())
-	model.selectedPane = "turns"
-	model.selectedTurn = 1 // Start at middle turn
+	agentID := model.activeAgents[0]
 
-	// Press down arrow
+	// Set initial scroll offset
+	model.agentOutputs[agentID].ScrollOffset = 5
+
+	// Press down arrow - should increase scroll offset
 	updatedModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m := updatedModel.(Model)
-	assert.Equal(t, 2, m.selectedTurn)
+	assert.Equal(t, 6, m.agentOutputs[agentID].ScrollOffset)
 
-	// Press up arrow
+	// Press up arrow - should decrease scroll offset
 	updatedModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	m = updatedModel.(Model)
-	assert.Equal(t, 1, m.selectedTurn)
+	assert.Equal(t, 5, m.agentOutputs[agentID].ScrollOffset)
 
 	// Try to go above 0
-	m.selectedTurn = 0
+	m.agentOutputs[agentID].ScrollOffset = 0
 	updatedModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	m = updatedModel.(Model)
-	assert.Equal(t, 0, m.selectedTurn) // Should stay at 0
+	assert.Equal(t, 0, m.agentOutputs[agentID].ScrollOffset) // Should stay at 0
 }
 
 func TestUpdate_KeyboardViKeys(t *testing.T) {
 	tmpDir := t.TempDir()
 	session := mockSession(tmpDir)
-	session.TurnHistory = append(session.TurnHistory,
-		types.Turn{Number: 2, AgentID: "agent2", Status: types.TurnCompleted},
-	)
 
 	model := NewModel(session, mockEventBus())
-	model.selectedPane = "turns"
-	model.selectedTurn = 0
+	agentID := model.activeAgents[0]
 
-	// Press 'j' (down)
+	// Set initial scroll offset
+	model.agentOutputs[agentID].ScrollOffset = 3
+
+	// Press 'j' (down) - should increase scroll offset
 	updatedModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	m := updatedModel.(Model)
-	assert.Equal(t, 1, m.selectedTurn)
+	assert.Equal(t, 4, m.agentOutputs[agentID].ScrollOffset)
 
-	// Press 'k' (up)
+	// Press 'k' (up) - should decrease scroll offset
 	updatedModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
 	m = updatedModel.(Model)
-	assert.Equal(t, 0, m.selectedTurn)
+	assert.Equal(t, 3, m.agentOutputs[agentID].ScrollOffset)
 }
 
 func TestUpdate_KeyboardLeftRight(t *testing.T) {
 	tmpDir := t.TempDir()
 	model := NewModel(mockSession(tmpDir), mockEventBus())
-	model.selectedPane = "turns"
 
-	// Press right arrow
+	// Should have 2 agents
+	assert.Equal(t, 2, len(model.activeAgents))
+	assert.Equal(t, 0, model.selectedAgent) // Start at agent 0
+
+	// Press right arrow - should switch to agent 1
 	updatedModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyRight})
 	m := updatedModel.(Model)
-	assert.Equal(t, "file", m.selectedPane)
+	assert.Equal(t, 1, m.selectedAgent)
 
-	// Press left arrow
+	// Press left arrow - should switch back to agent 0
 	updatedModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
 	m = updatedModel.(Model)
-	assert.Equal(t, "turns", m.selectedPane)
+	assert.Equal(t, 0, m.selectedAgent)
 }
 
 func TestUpdate_KeyboardViPaneSwitch(t *testing.T) {
 	tmpDir := t.TempDir()
 	model := NewModel(mockSession(tmpDir), mockEventBus())
-	model.selectedPane = "turns"
 
-	// Press 'l' (right)
+	// Should have 2 agents
+	assert.Equal(t, 2, len(model.activeAgents))
+	assert.Equal(t, 0, model.selectedAgent) // Start at agent 0
+	assert.Equal(t, ViewModeAgents, model.viewMode)
+
+	// Press 'l' (right) - should switch to agent 1
 	updatedModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
 	m := updatedModel.(Model)
-	assert.Equal(t, "file", m.selectedPane)
+	assert.Equal(t, 1, m.selectedAgent)
 
-	// Press 'h' (left)
+	// Press 'h' (left) - in agent view, should switch back to agent 0
 	updatedModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
 	m = updatedModel.(Model)
-	assert.Equal(t, "turns", m.selectedPane)
+	assert.Equal(t, 0, m.selectedAgent)
+	assert.Equal(t, ViewModeAgents, m.viewMode) // Should still be in agent view
 }
 
 func TestUpdate_KeyboardTab(t *testing.T) {

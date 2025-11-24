@@ -25,6 +25,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, waitForEvent(m.eventSub)
 
+	case deliverableContentMsg:
+		if msg.err != nil {
+			// Handle error - fallback to showing error message
+			m.deliverableContent = "Error loading deliverable: " + msg.err.Error()
+		} else {
+			m.deliverableContent = msg.content
+		}
+		m.deliverablePath = msg.path
+		// Switch to completion view
+		m.viewMode = ViewModeCompletion
+		return m, waitForEvent(m.eventSub)
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -47,35 +59,61 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.paused = true
 		return m, tea.Quit
 
+	case "h":
+		// Toggle view mode or navigate agent panes
+		if m.viewMode == ViewModeCompletion {
+			// In completion view, 'h' switches back to agent history
+			m.viewMode = ViewModeAgents
+		} else {
+			// In agent view, 'h' (or 'left') navigates to previous agent pane
+			if m.selectedAgent > 0 {
+				m.selectedAgent--
+			}
+		}
+
 	case "up", "k":
-		// Scroll up in selected agent pane
-		if m.selectedAgent >= 0 && m.selectedAgent < len(m.activeAgents) {
-			agentID := m.activeAgents[m.selectedAgent]
-			if agentState, exists := m.agentOutputs[agentID]; exists {
-				if agentState.ScrollOffset > 0 {
-					agentState.ScrollOffset--
+		// Scroll up
+		if m.viewMode == ViewModeCompletion {
+			// Scroll up in completion view
+			if m.scrollOffset > 0 {
+				m.scrollOffset--
+			}
+		} else {
+			// Scroll up in selected agent pane
+			if m.selectedAgent >= 0 && m.selectedAgent < len(m.activeAgents) {
+				agentID := m.activeAgents[m.selectedAgent]
+				if agentState, exists := m.agentOutputs[agentID]; exists {
+					if agentState.ScrollOffset > 0 {
+						agentState.ScrollOffset--
+					}
 				}
 			}
 		}
 
 	case "down", "j":
-		// Scroll down in selected agent pane
-		if m.selectedAgent >= 0 && m.selectedAgent < len(m.activeAgents) {
-			agentID := m.activeAgents[m.selectedAgent]
-			if agentState, exists := m.agentOutputs[agentID]; exists {
-				agentState.ScrollOffset++
+		// Scroll down
+		if m.viewMode == ViewModeCompletion {
+			// Scroll down in completion view
+			m.scrollOffset++
+		} else {
+			// Scroll down in selected agent pane
+			if m.selectedAgent >= 0 && m.selectedAgent < len(m.activeAgents) {
+				agentID := m.activeAgents[m.selectedAgent]
+				if agentState, exists := m.agentOutputs[agentID]; exists {
+					agentState.ScrollOffset++
+				}
 			}
 		}
 
-	case "left", "h":
-		// Switch to previous agent pane
-		if m.selectedAgent > 0 {
+	case "left":
+		// Switch to previous agent pane (only in agent view)
+		if m.viewMode == ViewModeAgents && m.selectedAgent > 0 {
 			m.selectedAgent--
 		}
 
 	case "right", "l":
-		// Switch to next agent pane
-		if m.selectedAgent < len(m.activeAgents)-1 {
+		// Switch to next agent pane (only in agent view)
+		if m.viewMode == ViewModeAgents && m.selectedAgent < len(m.activeAgents)-1 {
 			m.selectedAgent++
 		}
 
@@ -237,6 +275,12 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 		m.session.CompletedAt = &time.Time{}
 		*m.session.CompletedAt = time.Now()
 		m.session.DeliverablePath = payload.DeliverablePath
+
+		// Load deliverable content and switch to completion view
+		return m, tea.Batch(
+			loadDeliverableContent(payload.DeliverablePath),
+			waitForEvent(m.eventSub),
+		)
 
 	case types.EventSessionPaused:
 		m.session.Status = types.SessionPaused
