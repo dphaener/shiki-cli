@@ -167,6 +167,19 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 		// Refresh file list in case new files were created
 		m.fileList = getWorkspaceFiles(m.workspaceDir)
 
+	case types.EventToolInvoked:
+		payload := event.Payload.(events.ToolInvokedPayload)
+		// Add tool invocation to activity log (keep last 50)
+		activity := ToolActivity{
+			ToolName:  payload.ToolName,
+			AgentID:   payload.AgentID,
+			Timestamp: event.Timestamp,
+		}
+		m.toolActivity = append(m.toolActivity, activity)
+		if len(m.toolActivity) > 50 {
+			m.toolActivity = m.toolActivity[len(m.toolActivity)-50:]
+		}
+
 	case types.EventSessionCompleted:
 		payload := event.Payload.(events.SessionCompletedPayload)
 		m.session.Status = types.SessionCompleted

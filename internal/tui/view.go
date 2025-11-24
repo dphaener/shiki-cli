@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/darinhaener/collab/internal/tui/components"
 )
@@ -46,11 +48,19 @@ func (m Model) View() string {
 	// Join panes horizontally
 	panes := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 
+	// Get most recent tool activity
+	recentTool := ""
+	if len(m.toolActivity) > 0 {
+		last := m.toolActivity[len(m.toolActivity)-1]
+		recentTool = fmt.Sprintf("%s: %s", last.AgentID, last.ToolName)
+	}
+
 	// Render status bar
 	statusBar := components.RenderStatusBar(
 		len(m.fileList),
 		m.selectedPane,
 		m.width,
+		recentTool,
 	)
 
 	// Join all sections vertically

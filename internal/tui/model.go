@@ -4,11 +4,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/pkg/types"
 )
+
+// ToolActivity represents a tool invocation for display
+type ToolActivity struct {
+	ToolName  string
+	AgentID   string
+	Timestamp time.Time
+}
 
 // Model represents the TUI state (Bubbletea Model)
 type Model struct {
@@ -19,6 +27,7 @@ type Model struct {
 	fileList     []string
 	eventSub     *events.Subscriber
 	workspaceDir string
+	toolActivity []ToolActivity // Recent tool invocations
 
 	// UI state
 	selectedTurn int
@@ -41,7 +50,9 @@ func NewModel(session *types.Session, bus *events.EventBus) Model {
 	sub := bus.Subscribe("tui",
 		types.EventTurnStarted,
 		types.EventTurnCompleted,
+		types.EventTurnError,
 		types.EventFileUpdated,
+		types.EventToolInvoked,
 		types.EventSessionCompleted,
 		types.EventSessionPaused,
 		types.EventSessionError,
@@ -63,6 +74,7 @@ func NewModel(session *types.Session, bus *events.EventBus) Model {
 		fileList:     fileList,
 		eventSub:     sub,
 		workspaceDir: session.WorkspaceDir,
+		toolActivity: make([]ToolActivity, 0),
 		selectedPane: "turns",
 		selectedTurn: len(session.TurnHistory) - 1,
 		selectedFile: indexOf(fileList, currentFile),

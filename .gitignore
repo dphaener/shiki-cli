@@ -11,7 +11,7 @@ sekkei-specs/*/tasks/for_review/
 /.config
 /coverage/
 /InstalledFiles
-/pkg/
+# /pkg/ - Commented out to allow Go pkg/ directory
 /spec/reports/
 /spec/examples.txt
 /test/tmp/

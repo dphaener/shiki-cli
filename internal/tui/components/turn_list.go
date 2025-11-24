@@ -143,7 +143,7 @@ func formatTurnLine(turn types.Turn, isSelected bool, width int) string {
 	}
 
 	// Duration
-	durationMS := turn.DurationMS
+	durationMS := turn.DurationMs
 	var durationStr string
 	if durationMS < 1000 {
 		durationStr = fmt.Sprintf("%dms", durationMS)

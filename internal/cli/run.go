@@ -13,6 +13,7 @@ import (
 	"github.com/darinhaener/collab/internal/orchestrator"
 	"github.com/darinhaener/collab/internal/storage"
 	"github.com/darinhaener/collab/internal/template"
+	"github.com/darinhaener/collab/internal/tui"
 	"github.com/darinhaener/collab/pkg/types"
 	"github.com/spf13/cobra"
 )
@@ -72,8 +73,7 @@ The session runs until both agents submit matching deliverables or max turns is 
 
 			// Run session
 			if watchMode {
-				PrintInfo("Watch mode not yet implemented - running headless")
-				return runHeadless(session, apiKey)
+			return runWithTUI(session, apiKey)
 			}
 
 			return runHeadless(session, apiKey)
@@ -165,6 +165,69 @@ func runHeadless(session *types.Session, apiKey string) error {
 	return displayFinalSummary(session, duration)
 }
 
+// runWithTUI runs the session with an interactive TUI
+func runWithTUI(session *types.Session, apiKey string) error {
+	// Create event bus
+	eventBus := events.NewEventBus(100)
+	defer eventBus.Shutdown()
+
+	// Create orchestrator
+	orch := orchestrator.NewOrchestrator(session, eventBus, apiKey)
+
+	// Initialize orchestrator
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := orch.Initialize(ctx); err != nil {
+		PrintError("Failed to initialize orchestrator: %v", err)
+		return ExitWithCode(ExitError)
+	}
+	defer orch.Shutdown()
+
+	// Run orchestrator in background goroutine
+	orchDone := make(chan error, 1)
+	startTime := time.Now()
+	go func() {
+		orchDone <- orch.Run(ctx)
+	}()
+
+	// Run TUI in main thread (blocks until user exits)
+	tuiErr := tui.Run(session, eventBus)
+
+	// If TUI exited with pause, cancel orchestrator
+	if tui.IsPausedError(tuiErr) {
+		cancel() // Signal orchestrator to pause
+		<-orchDone // Wait for orchestrator to finish
+		PrintInfo("Session paused by user")
+		return ExitWithCode(ExitUserInterrupt)
+	}
+
+	// If TUI exited with error (not pause), still cancel orchestrator
+	if tuiErr != nil {
+		cancel()
+		<-orchDone
+		PrintError("TUI error: %v", tuiErr)
+		return ExitWithCode(ExitError)
+	}
+
+	// TUI exited normally (session completed or errored), wait for orchestrator
+	orchErr := <-orchDone
+	if orchErr != nil {
+		// Check if it was a user interrupt
+		if ctx.Err() == context.Canceled {
+			PrintInfo("Session paused by user")
+			return ExitWithCode(ExitUserInterrupt)
+		}
+
+		PrintError("Session error: %v", orchErr)
+		return ExitWithCode(ExitError)
+	}
+
+	// Display final summary
+	duration := time.Since(startTime)
+	return displayFinalSummary(session, duration)
+}
+
 // displayEvents displays real-time events during session execution
 func displayEvents(eventChan <-chan events.Event, session *types.Session) {
 	for event := range eventChan {
@@ -206,7 +269,7 @@ func displayTurnSummary(event events.Event, session *types.Session) {
 	}
 
 	// Format duration
-	durationSec := float64(turn.DurationMS) / 1000.0
+	durationSec := float64(turn.DurationMs) / 1000.0
 
 	// Display turn summary
 	fmt.Printf("\nTurn %d [%s]: %.1fs, %d tokens, $%.2f, %d tools\n",

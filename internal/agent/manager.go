@@ -143,31 +143,23 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 							toolName := msgStr[nameStart : nameStart+nameEnd]
 							// Strip mcp__ prefix for cleaner display
 							displayName := strings.TrimPrefix(toolName, "mcp__collaboration__")
-							fmt.Printf("  → %s using tool: %s\n", agentID, displayName)
+
+							// Emit ToolInvoked event for TUI
+							m.eventBus.Publish(events.NewToolInvoked(
+								displayName,
+								agentID,
+								m.sessionID,
+								turnNumber,
+								nil, // args not available in this format
+							))
 						}
 					}
 				}
 
-				// Extract and display text content from assistant messages
+				// Extract text content from assistant messages (for responseText accumulation)
+				// Text responses are accumulated but not emitted as events to avoid TUI spam
 				if strings.Contains(msgStr, "Type:text") {
-					// Try to extract text content
-					// Format: Text:... (content until next field)
-					if idx := strings.Index(msgStr, "Text:"); idx != -1 {
-						textStart := idx + 5 // len("Text:")
-						// Find the end - look for "}]" which marks end of content block
-						textEnd := strings.Index(msgStr[textStart:], "}]")
-						if textEnd > 0 && textEnd < 200 { // Only show first ~200 chars
-							text := msgStr[textStart : textStart+textEnd]
-							text = strings.TrimSpace(text)
-							if len(text) > 0 {
-								// Truncate if too long
-								if len(text) > 150 {
-									text = text[:150] + "..."
-								}
-								fmt.Printf("  💬 %s: %s\n", agentID, text)
-							}
-						}
-					}
+					// Text content is included in responseText accumulation below
 				}
 
 				// Accumulate response text

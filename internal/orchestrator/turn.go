@@ -35,7 +35,7 @@ func (o *Orchestrator) ExecuteTurn(ctx context.Context, agentCfg *types.Agent) (
 		turn.ErrorMessage = err.Error()
 		now := time.Now()
 		turn.CompletedAt = &now
-		turn.DurationMS = time.Since(turn.StartedAt).Milliseconds()
+		turn.DurationMs = time.Since(turn.StartedAt).Milliseconds()
 
 		// Emit TurnError event
 		o.eventBus.Publish(events.NewTurnError(turn, o.session.ID, err.Error()))
@@ -46,7 +46,7 @@ func (o *Orchestrator) ExecuteTurn(ctx context.Context, agentCfg *types.Agent) (
 	// Complete turn successfully
 	now := time.Now()
 	turn.CompletedAt = &now
-	turn.DurationMS = result.Duration.Milliseconds()
+	turn.DurationMs = result.Duration.Milliseconds()
 	turn.TokensUsed = result.TokensUsed
 	turn.Cost = result.Cost
 	turn.ToolCalls = result.ToolCalls

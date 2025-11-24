@@ -4,22 +4,21 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"time"
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/darinhaener/collab/internal/events"
 )
 
 // Watcher monitors filesystem changes and emits events
 type Watcher struct {
 	fsWatcher    *fsnotify.Watcher
 	workspaceDir string
-	eventChan    chan<- types.Event
+	eventChan    chan<- events.Event
 }
 
 // NewWatcher creates a new file watcher for the workspace
-func NewWatcher(workspaceDir string, eventChan chan<- types.Event) (*Watcher, error) {
+func NewWatcher(workspaceDir string, eventChan chan<- events.Event) (*Watcher, error) {
 	fsWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("create fsnotify watcher: %w", err)
@@ -74,15 +73,8 @@ func (w *Watcher) Start(ctx context.Context, sessionID string) {
 				}
 
 				// Emit FileUpdated event
-				w.eventChan <- types.Event{
-					Type:      types.EventFileUpdated,
-					SessionID: sessionID,
-					Timestamp: time.Now(),
-					Payload: map[string]interface{}{
-						"path":      event.Name,
-						"operation": operation,
-					},
-				}
+			// Emit FileUpdated event
+			w.eventChan <- events.NewFileUpdated(event.Name, operation, sessionID)
 
 			case err, ok := <-w.fsWatcher.Errors:
 				if !ok {

@@ -288,7 +288,7 @@ func TestUpdate_EventTurnCompleted(t *testing.T) {
 	assert.Equal(t, types.TurnCompleted, m.turnHistory[0].Status)
 	assert.Equal(t, 1000, m.turnHistory[0].TokensUsed)
 	assert.Equal(t, 0.05, m.turnHistory[0].Cost)
-	assert.Equal(t, int64(2000), m.turnHistory[0].DurationMS)
+	assert.Equal(t, int64(2000), m.turnHistory[0].DurationMs)
 	assert.Equal(t, 1000, m.session.TotalTokens)
 	assert.Equal(t, 0.05, m.session.TotalCost)
 	assert.NotNil(t, cmd)

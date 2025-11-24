@@ -21,12 +21,18 @@ var (
 )
 
 // RenderStatusBar renders the bottom status bar with keybindings
-func RenderStatusBar(fileCount int, selectedPane string, width int) string {
+func RenderStatusBar(fileCount int, selectedPane string, width int, recentTool string) string {
 	// File count
 	files := fmt.Sprintf("Files: %d", fileCount)
 
 	// Current pane indicator
 	paneIndicator := fmt.Sprintf("Pane: %s", selectedPane)
+
+	// Recent tool activity
+	toolActivity := ""
+	if recentTool != "" {
+		toolActivity = fmt.Sprintf("→ %s", recentTool)
+	}
 
 	// Keybindings help
 	keys := []string{
@@ -50,11 +56,11 @@ func RenderStatusBar(fileCount int, selectedPane string, width int) string {
 	)
 
 	// Build status bar layout
-	leftSection := lipgloss.JoinHorizontal(lipgloss.Left,
-		files,
-		" │ ",
-		paneIndicator,
-	)
+	leftParts := []string{files, " │ ", paneIndicator}
+	if toolActivity != "" {
+		leftParts = append(leftParts, " │ ", toolActivity)
+	}
+	leftSection := lipgloss.JoinHorizontal(lipgloss.Left, leftParts...)
 
 	// Calculate spacing
 	usedWidth := lipgloss.Width(leftSection) + lipgloss.Width(keysStr)
