@@ -3,10 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
 	"github.com/darinhaener/collab/internal/events"
@@ -17,14 +14,16 @@ type ToolsBuilder struct {
 	workspaceDir string
 	sessionID    string
 	eventBus     *events.EventBus
+	server       *Server
 }
 
 // NewToolsBuilder creates a new tools builder
-func NewToolsBuilder(workspaceDir, sessionID string, eventBus *events.EventBus) *ToolsBuilder {
+func NewToolsBuilder(server *Server) *ToolsBuilder {
 	return &ToolsBuilder{
-		workspaceDir: workspaceDir,
-		sessionID:    sessionID,
-		eventBus:     eventBus,
+		workspaceDir: server.workspaceDir,
+		sessionID:    server.sessionID,
+		eventBus:     server.eventBus,
+		server:       server,
 	}
 }
 
@@ -49,48 +48,31 @@ func (tb *ToolsBuilder) createSendMessageTool(agentID string) claude.McpTool {
 		map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"message": map[string]any{
+				"content": map[string]any{
 					"type":        "string",
 					"description": "The message content to send to your collaborator",
 				},
 			},
-			"required": []string{"message"},
+			"required": []string{"content"},
 		},
 		func(ctx context.Context, args map[string]any) (*claude.McpToolResult, error) {
-			message, ok := args["message"].(string)
-			if !ok {
-				return errorResult("message parameter must be a string"), nil
+			// Extract turn number from context
+			turn := 0
+			if turnVal := ctx.Value("turn"); turnVal != nil {
+				if t, ok := turnVal.(int); ok {
+					turn = t
+				}
 			}
 
-			// Determine recipient (other agent)
-			recipientID := "agent_2"
-			if strings.Contains(agentID, "agent_2") {
-				recipientID = "agent_1"
-			}
-
-			// Write message using storage
-			messageData := fmt.Sprintf("From: %s\nTo: %s\nTime: %s\n\n%s\n\n---\n\n",
-				agentID, recipientID, time.Now().Format(time.RFC3339), message)
-
-			messagesFile := filepath.Join(tb.workspaceDir, "messages", fmt.Sprintf("%s_to_%s.md", agentID, recipientID))
-
-			// Ensure messages directory exists
-			if err := os.MkdirAll(filepath.Dir(messagesFile), 0700); err != nil {
-				return errorResult(fmt.Sprintf("Failed to create messages directory: %v", err)), nil
-			}
-
-			// Append to messages file
-			f, err := os.OpenFile(messagesFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+			// Call server handler which handles storage and events
+			result, err := tb.server.HandleSendMessage(agentID, turn, args)
 			if err != nil {
-				return errorResult(fmt.Sprintf("Failed to open messages file: %v", err)), nil
-			}
-			defer f.Close()
-
-			if _, err := f.WriteString(messageData); err != nil {
-				return errorResult(fmt.Sprintf("Failed to write message: %v", err)), nil
+				return errorResult(fmt.Sprintf("Failed to send message: %v", err)), nil
 			}
 
-			return successResult(fmt.Sprintf("Message sent to %s", recipientID)), nil
+			// Extract message path from result
+			messagePath, _ := result["message_path"].(string)
+			return successResult(fmt.Sprintf("Message sent successfully (saved to %s)", messagePath)), nil
 		},
 	)
 }
@@ -105,28 +87,37 @@ func (tb *ToolsBuilder) createReadMessagesTool(agentID string) claude.McpTool {
 			"properties": map[string]any{},
 		},
 		func(ctx context.Context, args map[string]any) (*claude.McpToolResult, error) {
-			// Determine sender (other agent)
-			senderID := "agent_2"
-			if strings.Contains(agentID, "agent_2") {
-				senderID = "agent_1"
+			// Extract turn number from context
+			turn := 0
+			if turnVal := ctx.Value("turn"); turnVal != nil {
+				if t, ok := turnVal.(int); ok {
+					turn = t
+				}
 			}
 
-			messagesFile := filepath.Join(tb.workspaceDir, "messages", fmt.Sprintf("%s_to_%s.md", senderID, agentID))
-
-			// Read messages file
-			content, err := os.ReadFile(messagesFile)
+			// Call server handler
+			result, err := tb.server.HandleReadMessages(agentID, turn, args)
 			if err != nil {
-				if os.IsNotExist(err) {
-					return successResult("No messages yet"), nil
-				}
 				return errorResult(fmt.Sprintf("Failed to read messages: %v", err)), nil
 			}
 
-			if len(content) == 0 {
+			// Format messages for display
+			messages, ok := result["messages"].([]map[string]interface{})
+			if !ok || len(messages) == 0 {
 				return successResult("No messages yet"), nil
 			}
 
-			return successResult(string(content)), nil
+			// Build formatted message list
+			var output strings.Builder
+			output.WriteString(fmt.Sprintf("Found %d message(s):\n\n", len(messages)))
+			for i, msg := range messages {
+				from, _ := msg["from"].(string)
+				timestamp, _ := msg["timestamp"].(string)
+				content, _ := msg["content"].(string)
+				output.WriteString(fmt.Sprintf("Message %d:\nFrom: %s\nTime: %s\n\n%s\n\n---\n\n", i+1, from, timestamp, content))
+			}
+
+			return successResult(output.String()), nil
 		},
 	)
 }
@@ -147,28 +138,22 @@ func (tb *ToolsBuilder) createWriteSharedContextTool(agentID string) claude.McpT
 			"required": []string{"content"},
 		},
 		func(ctx context.Context, args map[string]any) (*claude.McpToolResult, error) {
-			content, ok := args["content"].(string)
-			if !ok {
-				return errorResult("content parameter must be a string"), nil
+			// Extract turn number from context
+			turn := 0
+			if turnVal := ctx.Value("turn"); turnVal != nil {
+				if t, ok := turnVal.(int); ok {
+					turn = t
+				}
 			}
 
-			contextFile := filepath.Join(tb.workspaceDir, "shared_context.md")
-
-			// Append to shared context
-			entry := fmt.Sprintf("\n---\n**Added by:** %s at %s\n\n%s\n",
-				agentID, time.Now().Format(time.RFC3339), content)
-
-			f, err := os.OpenFile(contextFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+			// Call server handler
+			result, err := tb.server.HandleWriteSharedContext(agentID, turn, args)
 			if err != nil {
-				return errorResult(fmt.Sprintf("Failed to open shared context: %v", err)), nil
-			}
-			defer f.Close()
-
-			if _, err := f.WriteString(entry); err != nil {
 				return errorResult(fmt.Sprintf("Failed to write shared context: %v", err)), nil
 			}
 
-			return successResult("Shared context updated"), nil
+			path, _ := result["path"].(string)
+			return successResult(fmt.Sprintf("Shared context updated (saved to %s)", path)), nil
 		},
 	)
 }
@@ -183,17 +168,30 @@ func (tb *ToolsBuilder) createReadSharedContextTool() claude.McpTool {
 			"properties": map[string]any{},
 		},
 		func(ctx context.Context, args map[string]any) (*claude.McpToolResult, error) {
-			contextFile := filepath.Join(tb.workspaceDir, "shared_context.md")
-
-			content, err := os.ReadFile(contextFile)
-			if err != nil {
-				if os.IsNotExist(err) {
-					return successResult("# Shared Context\n\nNo shared context yet"), nil
+			// Extract turn number from context
+			turn := 0
+			if turnVal := ctx.Value("turn"); turnVal != nil {
+				if t, ok := turnVal.(int); ok {
+					turn = t
 				}
+			}
+
+			// Need agentID from context since this tool doesn't take it as parameter
+			agentID := "unknown"
+			if agentVal := ctx.Value("agent_id"); agentVal != nil {
+				if id, ok := agentVal.(string); ok {
+					agentID = id
+				}
+			}
+
+			// Call server handler
+			result, err := tb.server.HandleReadSharedContext(agentID, turn, args)
+			if err != nil {
 				return errorResult(fmt.Sprintf("Failed to read shared context: %v", err)), nil
 			}
 
-			return successResult(string(content)), nil
+			content, _ := result["content"].(string)
+			return successResult(content), nil
 		},
 	)
 }
@@ -214,32 +212,22 @@ func (tb *ToolsBuilder) createUpdateMemoryTool(agentID string) claude.McpTool {
 			"required": []string{"content"},
 		},
 		func(ctx context.Context, args map[string]any) (*claude.McpToolResult, error) {
-			content, ok := args["content"].(string)
-			if !ok {
-				return errorResult("content parameter must be a string"), nil
-			}
-			memoryFile := filepath.Join(tb.workspaceDir, "memory", fmt.Sprintf("%s_memory.md", agentID))
-
-			// Ensure memory directory exists
-			if err := os.MkdirAll(filepath.Dir(memoryFile), 0700); err != nil {
-				return errorResult(fmt.Sprintf("Failed to create memory directory: %v", err)), nil
+			// Extract turn number from context
+			turn := 0
+			if turnVal := ctx.Value("turn"); turnVal != nil {
+				if t, ok := turnVal.(int); ok {
+					turn = t
+				}
 			}
 
-			// Append to memory
-			entry := fmt.Sprintf("\n---\n**%s**\n\n%s\n",
-				time.Now().Format(time.RFC3339), content)
-
-			f, err := os.OpenFile(memoryFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+			// Call server handler
+			result, err := tb.server.HandleUpdateMemory(agentID, turn, args)
 			if err != nil {
-				return errorResult(fmt.Sprintf("Failed to open memory: %v", err)), nil
-			}
-			defer f.Close()
-
-			if _, err := f.WriteString(entry); err != nil {
-				return errorResult(fmt.Sprintf("Failed to write memory: %v", err)), nil
+				return errorResult(fmt.Sprintf("Failed to update memory: %v", err)), nil
 			}
 
-			return successResult("Memory updated"), nil
+			path, _ := result["path"].(string)
+			return successResult(fmt.Sprintf("Memory updated (saved to %s)", path)), nil
 		},
 	)
 }
@@ -254,17 +242,22 @@ func (tb *ToolsBuilder) createReadMemoryTool(agentID string) claude.McpTool {
 			"properties": map[string]any{},
 		},
 		func(ctx context.Context, args map[string]any) (*claude.McpToolResult, error) {
-			memoryFile := filepath.Join(tb.workspaceDir, "memory", fmt.Sprintf("%s_memory.md", agentID))
-
-			content, err := os.ReadFile(memoryFile)
-			if err != nil {
-				if os.IsNotExist(err) {
-					return successResult("# Memory\n\nNo memory yet"), nil
+			// Extract turn number from context
+			turn := 0
+			if turnVal := ctx.Value("turn"); turnVal != nil {
+				if t, ok := turnVal.(int); ok {
+					turn = t
 				}
+			}
+
+			// Call server handler
+			result, err := tb.server.HandleReadMemory(agentID, turn, args)
+			if err != nil {
 				return errorResult(fmt.Sprintf("Failed to read memory: %v", err)), nil
 			}
 
-			return successResult(string(content)), nil
+			content, _ := result["content"].(string)
+			return successResult(content), nil
 		},
 	)
 }
@@ -281,42 +274,32 @@ func (tb *ToolsBuilder) createSubmitDeliverableTool(agentID string) claude.McpTo
 					"type":        "string",
 					"description": "The deliverable content",
 				},
-				"notes": map[string]any{
-					"type":        "string",
-					"description": "Notes about the deliverable",
+				"approved": map[string]any{
+					"type":        "boolean",
+					"description": "Confirm that you approve this deliverable (must be true)",
 				},
 			},
-			"required": []string{"content"},
+			"required": []string{"content", "approved"},
 		},
 		func(ctx context.Context, args map[string]any) (*claude.McpToolResult, error) {
-			content, ok := args["content"].(string)
-			if !ok {
-				return errorResult("content parameter must be a string"), nil
+			// Extract turn number from context
+			turn := 0
+			if turnVal := ctx.Value("turn"); turnVal != nil {
+				if t, ok := turnVal.(int); ok {
+					turn = t
+				}
 			}
 
-			notes, _ := args["notes"].(string)
-
-			// Determine agent-specific file name
-			deliverableFileName := "agent_1_deliverable.md"
-			if strings.Contains(agentID, "agent_2") {
-				deliverableFileName = "agent_2_deliverable.md"
+			// Call server handler
+			result, err := tb.server.HandleSubmitDeliverable(agentID, turn, args)
+			if err != nil {
+				return errorResult(fmt.Sprintf("Failed to submit deliverable: %v", err)), nil
 			}
 
-			deliverableFile := filepath.Join(tb.workspaceDir, deliverableFileName)
+			status, _ := result["status"].(string)
+			message, _ := result["message"].(string)
 
-			// Write just the content to enable byte-for-byte comparison
-			// Metadata would differ between agents and prevent matching
-			if err := os.WriteFile(deliverableFile, []byte(content), 0600); err != nil {
-				return errorResult(fmt.Sprintf("Failed to write deliverable: %v", err)), nil
-			}
-
-			// Also write metadata to a separate file for reference
-			metadataFile := filepath.Join(tb.workspaceDir, fmt.Sprintf("%s_metadata.json", strings.TrimSuffix(deliverableFileName, ".md")))
-			metadata := fmt.Sprintf(`{"agent": "%s", "timestamp": "%s", "notes": "%s"}`,
-				agentID, time.Now().Format(time.RFC3339), notes)
-			_ = os.WriteFile(metadataFile, []byte(metadata), 0600) // Best effort, ignore errors
-
-			return successResult("Deliverable submitted successfully. When both agents submit matching deliverables, the session will complete."), nil
+			return successResult(fmt.Sprintf("[%s] %s", status, message)), nil
 		},
 	)
 }
@@ -345,13 +328,4 @@ func errorResult(message string) *claude.McpToolResult {
 		},
 		IsError: true,
 	}
-}
-
-// getAgentIDFromContext extracts agent ID from context
-// The agent manager will set this when calling tools
-func getAgentIDFromContext(ctx context.Context) string {
-	if agentID, ok := ctx.Value("agent_id").(string); ok {
-		return agentID
-	}
-	return "unknown"
 }

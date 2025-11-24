@@ -41,14 +41,14 @@ func (o *Orchestrator) Initialize(ctx context.Context) error {
 	// Create agent manager
 	o.agentManager = agent.NewManager(o.eventBus, o.session.ID, o.apiKey)
 
-	// Create MCP tools builder
-	toolsBuilder := mcp.NewToolsBuilder(o.session.WorkspaceDir, o.session.ID, o.eventBus)
-
-	// Keep the old server for compatibility (may remove later)
+	// Create MCP server first (required by ToolsBuilder)
 	o.mcpServer = mcp.NewServer(o.session.WorkspaceDir, o.session.ID, o.eventBus)
 	if err := o.mcpServer.Start(); err != nil {
 		return fmt.Errorf("start MCP server: %w", err)
 	}
+
+	// Create MCP tools builder with server instance
+	toolsBuilder := mcp.NewToolsBuilder(o.mcpServer)
 
 	// Spawn agent1 with its own set of tools
 	agent1Tools := toolsBuilder.CreateTools(o.session.Agent1.ID)

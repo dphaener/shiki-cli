@@ -86,6 +86,10 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 	turnCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
+	// Inject turn number and agent ID into context for tool handlers
+	turnCtx = context.WithValue(turnCtx, "turn", turnNumber)
+	turnCtx = context.WithValue(turnCtx, "agent_id", agentID)
+
 	start := time.Now()
 
 	// Send query to agent via SDK

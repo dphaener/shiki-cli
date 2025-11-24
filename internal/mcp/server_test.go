@@ -261,7 +261,8 @@ func TestGetTools(t *testing.T) {
 	bus := events.NewEventBus(100)
 	defer bus.Shutdown()
 
-	tb := NewToolsBuilder(wsDir, "test-session-5", bus)
+	server := NewServer(wsDir, "test-session-5", bus)
+	tb := NewToolsBuilder(server)
 
 	tools := tb.CreateTools("test-agent")
 	assert.Len(t, tools, 7, "Should have exactly 7 tools")
