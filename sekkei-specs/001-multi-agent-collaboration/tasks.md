@@ -322,23 +322,25 @@ description: "Work package task list for multi-agent collaboration CLI"
 
 ---
 
-## Work Package WP09: Terminal UI (TUI) (Priority: P2)
+## Work Package WP09: Terminal UI (TUI) (Priority: P2) ✅
 
 **Goal**: Implement Bubbletea-based real-time monitoring interface with split-pane layout, keyboard navigation, and sub-100ms event updates.
 
 **Independent Test**: TUI renders correctly in 80x24 terminal, updates appear within 100ms of events, keyboard shortcuts work, file viewer displays all file types, TUI exits cleanly on 'q'.
 
-**Prompt**: `tasks/planned/WP09-tui.md`
+**Prompt**: `tasks/done/WP09-tui.md` ✅
+
+**Status**: COMPLETED (2025-11-24) - 168 test cases, 84.8% coverage, all DoD criteria met
 
 ### Included Subtasks
-- [ ] T052: Implement tui/model.go (Bubbletea Model struct with session state, turn history, current file, event subscription)
-- [ ] T053: Implement tui/update.go (Update function to handle keyboard input and EventBus messages)
-- [ ] T054: Implement tui/view.go (View function rendering header, split panes, status bar with Lipgloss)
-- [ ] T055: Implement tui/components/turn_list.go (turn history list with turn number, agent, duration, tokens, cost)
-- [ ] T056: Implement tui/components/file_viewer.go (file content viewer with scrolling, markdown syntax highlighting)
-- [ ] T057: Implement tui/components/status_bar.go (bottom status bar with current activity, file counts, keybindings)
-- [ ] T058: Implement tui/components/header.go (top session header with ID, task name, duration, total cost)
-- [ ] T059: Implement tui/styles.go (Lipgloss style definitions for colors, borders, padding)
+- [X] T052: Implement tui/model.go (Bubbletea Model struct with session state, turn history, current file, event subscription) ✅
+- [X] T053: Implement tui/update.go (Update function to handle keyboard input and EventBus messages) ✅
+- [X] T054: Implement tui/view.go (View function rendering header, split panes, status bar with Lipgloss) ✅
+- [X] T055: Implement tui/components/turn_list.go (turn history list with turn number, agent, duration, tokens, cost) ✅
+- [X] T056: Implement tui/components/file_viewer.go (file content viewer with scrolling, markdown syntax highlighting) ✅
+- [X] T057: Implement tui/components/status_bar.go (bottom status bar with current activity, file counts, keybindings) ✅
+- [X] T058: Implement tui/components/header.go (top session header with ID, task name, duration, total cost) ✅
+- [X] T059: Implement tui/styles.go (Lipgloss style definitions for colors, borders, padding) ✅
 
 ### Implementation Notes
 1. Layout: header (1 line) + split panes (turn list | file viewer) + status bar (1 line)
