@@ -125,24 +125,27 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 			// Handle different message types
 			switch msgType {
 			case "assistant":
-				// Assistant messages may contain tool use or text
-				msgStr := fmt.Sprintf("%+v", msg)
+				// Type assert to SDKAssistantMessage to access content
+				if assistantMsg, ok := msg.(*claude.SDKAssistantMessage); ok {
+					// Process each content block in the message
+					for _, block := range assistantMsg.Message.Content {
+						switch content := block.(type) {
+						case claude.TextContentBlock:
+							// Extract and emit text content for TUI display
+							if content.Text != "" {
+								m.eventBus.Publish(events.NewAssistantMessage(
+									agentID,
+									m.sessionID,
+									turnNumber,
+									content.Text,
+								))
+								responseText += content.Text
+							}
 
-				// Check if this message contains a tool use
-				if strings.Contains(msgStr, "Type:tool_use") {
-					toolCalls++
-					// Try to extract tool name from the message string
-					// Format: Name:ToolName
-					if idx := strings.Index(msgStr, "Name:"); idx != -1 {
-						nameStart := idx + 5 // len("Name:")
-						nameEnd := strings.Index(msgStr[nameStart:], " ")
-						if nameEnd == -1 {
-							nameEnd = strings.Index(msgStr[nameStart:], "}")
-						}
-						if nameEnd > 0 {
-							toolName := msgStr[nameStart : nameStart+nameEnd]
+						case claude.ToolUseContentBlock:
+							toolCalls++
 							// Strip mcp__ prefix for cleaner display
-							displayName := strings.TrimPrefix(toolName, "mcp__collaboration__")
+							displayName := strings.TrimPrefix(content.Name, "mcp__collaboration__")
 
 							// Emit ToolInvoked event for TUI
 							m.eventBus.Publish(events.NewToolInvoked(
@@ -150,20 +153,21 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 								agentID,
 								m.sessionID,
 								turnNumber,
-								nil, // args not available in this format
+								nil, // We could parse content.Input if needed
 							))
 						}
 					}
+				} else {
+					// Fallback: if type assertion fails, use string representation
+					msgStr := fmt.Sprintf("%v", msg)
+					m.eventBus.Publish(events.NewAssistantMessage(
+						agentID,
+						m.sessionID,
+						turnNumber,
+						msgStr,
+					))
+					responseText += msgStr
 				}
-
-				// Extract text content from assistant messages (for responseText accumulation)
-				// Text responses are accumulated but not emitted as events to avoid TUI spam
-				if strings.Contains(msgStr, "Type:text") {
-					// Text content is included in responseText accumulation below
-				}
-
-				// Accumulate response text
-				responseText += fmt.Sprintf("%v", msg)
 
 			case "result":
 				// Result message signals completion
