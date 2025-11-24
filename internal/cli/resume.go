@@ -55,12 +55,11 @@ sessions cannot be resumed.`,
 			PrintInfo("Previous cost: $%.2f", session.TotalCost)
 			PrintInfo("Continuing from turn %d...", session.CurrentTurn+1)
 
-			// Get API key
+			// Get API key (optional - claude CLI will use saved credentials if not set)
 			apiKey := os.Getenv("ANTHROPIC_API_KEY")
 			if apiKey == "" {
-				PrintError("ANTHROPIC_API_KEY environment variable not set")
-				PrintInfo("Set it with: export ANTHROPIC_API_KEY=your-key-here")
-				return ExitWithCode(ExitError)
+				PrintInfo("Using Claude Code saved credentials (from /login)")
+				PrintInfo("If authentication fails, either run /login in Claude Code or set ANTHROPIC_API_KEY")
 			}
 
 			// Resume session

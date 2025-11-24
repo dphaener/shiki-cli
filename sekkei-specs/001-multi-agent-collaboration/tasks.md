@@ -374,16 +374,18 @@ description: "Work package task list for multi-agent collaboration CLI"
 **Prompt**: `tasks/planned/WP10-documentation-polish.md`
 
 ### Included Subtasks
-- [ ] T060: Write docs/architecture.md (system architecture overview with diagrams)
-- [ ] T061: Write docs/task-templates.md (template format guide with examples)
-- [ ] T062: Write docs/mcp-tools.md (MCP tool reference documentation)
-- [ ] T063: Update README.md (installation, quick start, examples, links to docs)
-- [ ] T064: Optimize binary size (use -ldflags="-s -w" to strip debug info, profile with go tool nm, target <50MB)
-- [ ] T065: Add shell completion generation (bash/zsh completions with Cobra, include in install script)
-- [ ] T066: Create scripts/install.sh (copy binary to $GOPATH/bin or /usr/local/bin, create config directory)
-- [ ] T067: Polish error messages (review all error paths, add suggestions for common failures like missing API key)
-- [ ] T068: Add version embedding (use -ldflags "-X main.version=..." to embed version/commit/date)
-- [ ] T069: Create CHANGELOG.md with release notes for v0.1.0
+- [X] T060: Write docs/architecture.md (system architecture overview with diagrams)
+- [X] T061: Write docs/task-templates.md (template format guide with examples)
+- [X] T062: Write docs/mcp-tools.md (MCP tool reference documentation)
+- [X] T063: Update README.md (installation, quick start, examples, links to docs)
+- [X] T064: Optimize binary size (use -ldflags="-s -w" to strip debug info, profile with go tool nm, target <50MB)
+- [X] T065: Add shell completion generation (bash/zsh completions with Cobra, include in install script)
+- [X] T066: Create scripts/install.sh (copy binary to $GOPATH/bin or /usr/local/bin, create config directory)
+- [X] T067: Polish error messages (review all error paths, add suggestions for common failures like missing API key)
+- [X] T068: Add version embedding (use -ldflags "-X main.version=..." to embed version/commit/date)
+- [X] T069: Create CHANGELOG.md with release notes for v0.1.0
+
+**Status**: ✅ **COMPLETED** (2025-11-24) - All subtasks verified and approved. Binary size: 4.5MB. See `tasks/done/WP10-documentation-polish.md` for detailed review.
 
 ### Implementation Notes
 1. Documentation should cover all 59 functional requirements and 8 user scenarios

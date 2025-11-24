@@ -75,20 +75,20 @@ func (o *Orchestrator) buildQuery(agentCfg *types.Agent) string {
 Your task is to collaborate with your partner agent to complete the following task:
 %s
 
-You have access to the following MCP tools for collaboration:
-- send_message: Send a message to your partner
-- read_messages: Read messages from your partner
-- write_shared_context: Write to shared context (both agents can see)
-- read_shared_context: Read shared context
-- update_memory: Update your private memory
-- read_memory: Read your private memory
-- submit_deliverable: Submit the final deliverable when ready
+You have access to the following MCP tools for collaboration (use the full tool names exactly as shown):
+- mcp__collaboration__send_message: Send a message to your partner
+- mcp__collaboration__read_messages: Read messages from your partner
+- mcp__collaboration__write_shared_context: Write to shared context (both agents can see)
+- mcp__collaboration__read_shared_context: Read shared context
+- mcp__collaboration__update_memory: Update your private memory
+- mcp__collaboration__read_memory: Read your private memory
+- mcp__collaboration__submit_deliverable: Submit the final deliverable when ready
 
 This is turn %d of %d. Please:
-1. Read any new messages from your partner
-2. Review the shared context
+1. Read any new messages from your partner using mcp__collaboration__read_messages
+2. Review the shared context using mcp__collaboration__read_shared_context
 3. Perform your role's responsibilities
-4. Communicate with your partner as needed
+4. Communicate with your partner using mcp__collaboration__send_message
 5. Submit a deliverable if you have completed the task (both agents must submit matching deliverables)
 
 Begin your turn.`,

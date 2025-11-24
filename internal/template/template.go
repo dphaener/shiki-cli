@@ -43,8 +43,8 @@ type CostLimits struct {
 // Defaults returns a template with sensible defaults
 func Defaults() *TaskTemplate {
 	return &TaskTemplate{
-		Agent1Model:        "claude-sonnet-4",
-		Agent2Model:        "claude-sonnet-4",
+		Agent1Model:        "claude-sonnet-4-20250514",
+		Agent2Model:        "claude-sonnet-4-20250514",
 		TurnTimeoutSeconds: 300,
 		TurnDelayMS:        0,
 	}

@@ -36,29 +36,43 @@ func NewAgent(cfg *types.Agent) *Agent {
 	}
 }
 
-// Start initializes the agent subprocess with MCP connection
-func (a *Agent) Start(ctx context.Context, mcpServerCmd string, mcpServerArgs []string, apiKey string) error {
+// Start initializes the agent subprocess with MCP tools
+func (a *Agent) Start(ctx context.Context, mcpTools []claude.McpTool, apiKey string, agentID string) error {
+	// Create SDK MCP server with the collaboration tools
+	mcpServer := claude.CreateSdkMcpServer(
+		"collaboration",
+		"1.0.0",
+		mcpTools,
+	)
+
+	// Build list of allowed tools (include both built-in and MCP tools)
+	allowedTools := []string{
+		// Common built-in tools
+		"Read", "Write", "Edit", "Glob", "Grep", "Bash",
+	}
+	// Add MCP collaboration tools with full prefixed names
+	for _, tool := range mcpTools {
+		fullToolName := fmt.Sprintf("mcp__collaboration__%s", tool.Name())
+		allowedTools = append(allowedTools, fullToolName)
+	}
+
 	// Configure SDK options
 	opts := &claude.Options{
-		Context:  ctx,
-		Model:    a.Model,
-		Cwd:      a.WorkspaceDir,
-		MaxTurns: 100, // Default max turns per query
+		Context:      ctx,
+		Model:        a.Model,
+		Cwd:          a.WorkspaceDir,
+		SystemPrompt: claude.SystemPromptLiteral(a.SystemPrompt),
+		MaxTurns:     100, // Default max turns per query
 		Env: map[string]string{
 			"ANTHROPIC_API_KEY": apiKey,
-			"AGENT_ID":          a.ID,
+			"AGENT_ID":          agentID,
 			"AGENT_NAME":        a.Name,
 			"AGENT_ROLE":        a.Role,
 		},
 		McpServers: map[string]claude.McpServerConfig{
-			"collab-mcp": &claude.McpStdioServerConfig{
-				Command: mcpServerCmd,
-				Args:    mcpServerArgs,
-				Env: map[string]string{
-					"AGENT_ID": a.ID,
-				},
-			},
+			"collaboration": mcpServer,
 		},
+		AllowedTools:                    allowedTools,
 		AllowDangerouslySkipPermissions: true, // Allow tools to run without prompts in headless mode
 	}
 

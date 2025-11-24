@@ -24,8 +24,8 @@ func TestVersionCommand(t *testing.T) {
 			buildDate: "2025-01-01T00:00:00Z",
 			wantContains: []string{
 				"collab version 1.0.0",
-				"Commit: abc123def456",
-				"Build date: 2025-01-01T00:00:00Z",
+				"commit:     abc123def456",
+				"built:      2025-01-01T00:00:00Z",
 			},
 			wantExitCode: ExitSuccess,
 		},
@@ -36,8 +36,8 @@ func TestVersionCommand(t *testing.T) {
 			buildDate: "unknown",
 			wantContains: []string{
 				"collab version dev",
-				"Commit: unknown",
-				"Build date: unknown",
+				"commit:     unknown",
+				"built:      unknown",
 			},
 			wantExitCode: ExitSuccess,
 		},
@@ -48,8 +48,8 @@ func TestVersionCommand(t *testing.T) {
 			buildDate: "2025-11-23",
 			wantContains: []string{
 				"collab version 0.1.0",
-				"Commit: abc123",
-				"Build date: 2025-11-23",
+				"commit:     abc123",
+				"built:      2025-11-23",
 			},
 			wantExitCode: ExitSuccess,
 		},
@@ -87,5 +87,5 @@ func TestVersionCommand_GoVersion(t *testing.T) {
 	output := stdout.String()
 
 	// Should contain Go version
-	assert.Contains(t, output, "Go version:")
+	assert.Contains(t, output, "go version:")
 }

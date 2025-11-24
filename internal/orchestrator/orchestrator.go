@@ -41,23 +41,24 @@ func (o *Orchestrator) Initialize(ctx context.Context) error {
 	// Create agent manager
 	o.agentManager = agent.NewManager(o.eventBus, o.session.ID, o.apiKey)
 
-	// Create and start MCP server
-	o.mcpServer = mcp.NewServer(o.session.WorkspaceDir, o.session.ID, o.eventBus)
+	// Create MCP tools builder
+	toolsBuilder := mcp.NewToolsBuilder(o.session.WorkspaceDir, o.session.ID, o.eventBus)
 
-	// Start MCP server
+	// Keep the old server for compatibility (may remove later)
+	o.mcpServer = mcp.NewServer(o.session.WorkspaceDir, o.session.ID, o.eventBus)
 	if err := o.mcpServer.Start(); err != nil {
 		return fmt.Errorf("start MCP server: %w", err)
 	}
 
-	// Spawn both agents
-	// NOTE: MCP endpoint is configured via STDIO transport
-	mcpEndpoint := "stdio"
-
-	if _, err := o.agentManager.SpawnAgent(ctx, &o.session.Agent1, mcpEndpoint); err != nil {
+	// Spawn agent1 with its own set of tools
+	agent1Tools := toolsBuilder.CreateTools(o.session.Agent1.ID)
+	if _, err := o.agentManager.SpawnAgent(ctx, &o.session.Agent1, agent1Tools); err != nil {
 		return fmt.Errorf("spawn agent1: %w", err)
 	}
 
-	if _, err := o.agentManager.SpawnAgent(ctx, &o.session.Agent2, mcpEndpoint); err != nil {
+	// Spawn agent2 with its own set of tools
+	agent2Tools := toolsBuilder.CreateTools(o.session.Agent2.ID)
+	if _, err := o.agentManager.SpawnAgent(ctx, &o.session.Agent2, agent2Tools); err != nil {
 		return fmt.Errorf("spawn agent2: %w", err)
 	}
 

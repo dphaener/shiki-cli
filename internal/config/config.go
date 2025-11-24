@@ -19,7 +19,7 @@ type Config struct {
 func Default() *Config {
 	return &Config{
 		WorkspaceDir:      filepath.Join(GetDataDir(), "sessions"),
-		DefaultModel:      "claude-sonnet-4",
+		DefaultModel:      "claude-sonnet-4-20250514",
 		TurnTimeoutSec:    300,
 		CostLimitSession:  10.0,
 		CostLimitPerAgent: 5.0,

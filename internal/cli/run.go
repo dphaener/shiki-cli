@@ -63,12 +63,11 @@ The session runs until both agents submit matching deliverables or max turns is 
 			PrintSuccess("Session created: %s", session.ID)
 			PrintSuccess("Workspace: %s", workspaceDir)
 
-			// Get API key
+			// Get API key (optional - claude CLI will use saved credentials if not set)
 			apiKey := os.Getenv("ANTHROPIC_API_KEY")
 			if apiKey == "" {
-				PrintError("ANTHROPIC_API_KEY environment variable not set")
-				PrintInfo("Set it with: export ANTHROPIC_API_KEY=your-key-here")
-				return ExitWithCode(ExitError)
+				PrintInfo("Using Claude Code saved credentials (from /login)")
+				PrintInfo("If authentication fails, either run /login in Claude Code or set ANTHROPIC_API_KEY")
 			}
 
 			// Run session
@@ -106,15 +105,16 @@ func createSession(tmpl *template.TaskTemplate, templatePath, workspaceRoot, ses
 		return nil, "", fmt.Errorf("create workspace directory: %w", err)
 	}
 
-	// Update session with workspace directory
-	session.WorkspaceDir = workspaceDir
-	session.Agent1.WorkspaceDir = workspaceDir
-	session.Agent2.WorkspaceDir = workspaceDir
-
-	// Create workspace structure from template
-	if _, err := storage.CreateWorkspace(session.ID, workspaceDir, tmpl.WorkspaceStructure); err != nil {
+	// Create workspace structure from template (this creates the actual workspace in a nested dir)
+	actualWorkspaceDir, err := storage.CreateWorkspace(session.ID, workspaceDir, tmpl.WorkspaceStructure)
+	if err != nil {
 		return nil, "", fmt.Errorf("create workspace structure: %w", err)
 	}
+
+	// Update session with the actual workspace directory
+	session.WorkspaceDir = actualWorkspaceDir
+	session.Agent1.WorkspaceDir = actualWorkspaceDir
+	session.Agent2.WorkspaceDir = actualWorkspaceDir
 
 	// Save initial session state
 	if err := orchestrator.SaveSession(session); err != nil {
@@ -170,7 +170,16 @@ func displayEvents(eventChan <-chan events.Event, session *types.Session) {
 	for event := range eventChan {
 		switch event.Type {
 		case types.EventTurnStarted:
-			// Display turn start (will be updated on completion)
+			if payload, ok := event.Payload.(events.TurnStartedPayload); ok {
+				agentName := payload.AgentID
+				// Get friendly agent name from session
+				if session.Agent1.ID == payload.AgentID {
+					agentName = session.Agent1.Name
+				} else if session.Agent2.ID == payload.AgentID {
+					agentName = session.Agent2.Name
+				}
+				PrintInfo("Turn %d: %s is thinking...", payload.Turn.Number, agentName)
+			}
 		case types.EventTurnCompleted:
 			displayTurnSummary(event, session)
 		case types.EventSessionCompleted:

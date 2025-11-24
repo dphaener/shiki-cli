@@ -14,11 +14,12 @@ func NewVersionCommand(version, commit, buildDate string) *cobra.Command {
 		Short: "Display version information",
 		Long:  "Display version, build commit, build date, and Go version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("collab version %s\n", version)
-			fmt.Printf("  commit:     %s\n", commit)
-			fmt.Printf("  built:      %s\n", buildDate)
-			fmt.Printf("  go version: %s\n", runtime.Version())
-			fmt.Printf("  platform:   %s/%s\n", runtime.GOOS, runtime.GOARCH)
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "collab version %s\n", version)
+			fmt.Fprintf(out, "  commit:     %s\n", commit)
+			fmt.Fprintf(out, "  built:      %s\n", buildDate)
+			fmt.Fprintf(out, "  go version: %s\n", runtime.Version())
+			fmt.Fprintf(out, "  platform:   %s/%s\n", runtime.GOOS, runtime.GOARCH)
 		},
 	}
 

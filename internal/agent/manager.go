@@ -3,9 +3,11 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
 	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/pkg/types"
 )
@@ -34,8 +36,8 @@ func NewManager(eventBus *events.EventBus, sessionID, apiKey string) *Manager {
 	}
 }
 
-// SpawnAgent creates and starts a new agent subprocess
-func (m *Manager) SpawnAgent(ctx context.Context, cfg *types.Agent, mcpEndpoint string) (*Agent, error) {
+// SpawnAgent creates and starts a new agent subprocess with MCP tools
+func (m *Manager) SpawnAgent(ctx context.Context, cfg *types.Agent, mcpTools []claude.McpTool) (*Agent, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -47,14 +49,8 @@ func (m *Manager) SpawnAgent(ctx context.Context, cfg *types.Agent, mcpEndpoint 
 	// Create agent instance
 	agent := NewAgent(cfg)
 
-	// Parse MCP endpoint to extract command and args
-	// For now, assume mcpEndpoint is in format "command args..."
-	// TODO: Properly parse STDIO endpoint format
-	mcpCmd := "collab-mcp-server" // This should be the actual MCP server binary
-	mcpArgs := []string{}         // Any args for the MCP server
-
-	// Start agent process with SDK
-	if err := agent.Start(ctx, mcpCmd, mcpArgs, m.apiKey); err != nil {
+	// Start agent process with SDK and MCP tools
+	if err := agent.Start(ctx, mcpTools, m.apiKey, cfg.ID); err != nil {
 		return nil, fmt.Errorf("failed to start agent %s: %w", cfg.ID, err)
 	}
 
@@ -124,12 +120,62 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 				goto done
 			}
 
-			// Handle different message types to collect metrics
-			// This is a simplified version - full implementation would handle all message types
-			switch msg.Type() {
-			case "text_delta", "text":
-				// Accumulate response text (simplified)
+			msgType := msg.Type()
+
+			// Handle different message types
+			switch msgType {
+			case "assistant":
+				// Assistant messages may contain tool use or text
+				msgStr := fmt.Sprintf("%+v", msg)
+
+				// Check if this message contains a tool use
+				if strings.Contains(msgStr, "Type:tool_use") {
+					toolCalls++
+					// Try to extract tool name from the message string
+					// Format: Name:ToolName
+					if idx := strings.Index(msgStr, "Name:"); idx != -1 {
+						nameStart := idx + 5 // len("Name:")
+						nameEnd := strings.Index(msgStr[nameStart:], " ")
+						if nameEnd == -1 {
+							nameEnd = strings.Index(msgStr[nameStart:], "}")
+						}
+						if nameEnd > 0 {
+							toolName := msgStr[nameStart : nameStart+nameEnd]
+							// Strip mcp__ prefix for cleaner display
+							displayName := strings.TrimPrefix(toolName, "mcp__collaboration__")
+							fmt.Printf("  → %s using tool: %s\n", agentID, displayName)
+						}
+					}
+				}
+
+				// Extract and display text content from assistant messages
+				if strings.Contains(msgStr, "Type:text") {
+					// Try to extract text content
+					// Format: Text:... (content until next field)
+					if idx := strings.Index(msgStr, "Text:"); idx != -1 {
+						textStart := idx + 5 // len("Text:")
+						// Find the end - look for "}]" which marks end of content block
+						textEnd := strings.Index(msgStr[textStart:], "}]")
+						if textEnd > 0 && textEnd < 200 { // Only show first ~200 chars
+							text := msgStr[textStart : textStart+textEnd]
+							text = strings.TrimSpace(text)
+							if len(text) > 0 {
+								// Truncate if too long
+								if len(text) > 150 {
+									text = text[:150] + "..."
+								}
+								fmt.Printf("  💬 %s: %s\n", agentID, text)
+							}
+						}
+					}
+				}
+
+				// Accumulate response text
 				responseText += fmt.Sprintf("%v", msg)
+
+			case "result":
+				// Result message signals completion
+				goto done
 			}
 
 			// TODO: Extract token usage from SDK messages
