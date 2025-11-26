@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,56 +12,22 @@ import (
 	"github.com/darinhaener/collab/pkg/types"
 )
 
-// debugLogger handles debug logging to a file
-type debugLogger struct {
-	file *os.File
+// PlanOrchestrator manages the planning workflow with a single agent
+type PlanOrchestrator struct {
+	session          *types.PlanSession
+	agent            *agentpkg.Agent
+	apiKey           string
+	ctx              context.Context
+	cancel           context.CancelFunc
+	planInstructions string // Instructions sent as first message to prime the agent
+	instructionsSent bool   // Whether we've sent the initial instructions
 }
 
-// newDebugLogger creates a new debug logger
-func newDebugLogger() *debugLogger {
-	// Create log file in current directory
-	logPath := filepath.Join(".", "collab-debug.log")
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return &debugLogger{file: nil}
-	}
-	return &debugLogger{file: f}
-}
-
-// log writes a message to the debug log
-func (d *debugLogger) log(format string, args ...interface{}) {
-	if d.file == nil {
-		return
-	}
-	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
-	msg := fmt.Sprintf(format, args...)
-	fmt.Fprintf(d.file, "[%s] %s\n", timestamp, msg)
-	d.file.Sync()
-}
-
-// close closes the debug log file
-func (d *debugLogger) close() {
-	if d.file != nil {
-		d.file.Close()
-	}
-}
-
-// SpecifyOrchestrator manages the specification workflow with a single agent
-type SpecifyOrchestrator struct {
-	session             *types.SpecifySession
-	agent               *agentpkg.Agent
-	apiKey              string
-	ctx                 context.Context
-	cancel              context.CancelFunc
-	specifyInstructions string // Instructions sent as first message to prime the agent
-	instructionsSent    bool   // Whether we've sent the initial instructions
-}
-
-// NewSpecifyOrchestrator creates a new specify orchestrator
-func NewSpecifyOrchestrator(session *types.SpecifySession, apiKey string) *SpecifyOrchestrator {
+// NewPlanOrchestrator creates a new plan orchestrator
+func NewPlanOrchestrator(session *types.PlanSession, apiKey string) *PlanOrchestrator {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return &SpecifyOrchestrator{
+	return &PlanOrchestrator{
 		session: session,
 		apiKey:  apiKey,
 		ctx:     ctx,
@@ -72,57 +36,44 @@ func NewSpecifyOrchestrator(session *types.SpecifySession, apiKey string) *Speci
 }
 
 // Initialize sets up the agent
-func (o *SpecifyOrchestrator) Initialize() error {
+func (o *PlanOrchestrator) Initialize() error {
 	// Create debug logger for initialization
 	logger := newDebugLogger()
 	defer logger.close()
 
-	logger.log("========== INITIALIZING SPECIFY AGENT ==========")
+	logger.log("========== INITIALIZING PLAN AGENT ==========")
 	logger.log("Session ID: %s", o.session.ID)
 	logger.log("Feature: %s (#%03d)", o.session.FriendlyName, o.session.FeatureNumber)
-	logger.log("Slug: %s", o.session.Slug)
+	logger.log("SpecSlug: %s", o.session.SpecSlug)
 	logger.log("SpecFile: %s", o.session.SpecFile)
-	logger.log("SpecDir: %s", o.session.SpecDir)
-	logger.log("ChecklistDir: %s", o.session.ChecklistDir)
-	logger.log("SkipDiscovery: %v", o.session.SkipDiscoveryQuestions)
+	logger.log("PlanFile: %s", o.session.PlanFile)
+	logger.log("ContractsDir: %s", o.session.ContractsDir)
 
-	// Create specify agent configuration - this generates the instructions
-	agentCfg := agentpkg.NewSpecifyAgent(o.session)
+	// Create plan agent configuration - this generates the instructions
+	agentCfg := agentpkg.NewPlanAgent(o.session)
 
 	// Store instructions to send as first message
-	o.specifyInstructions = agentCfg.SystemPrompt
+	o.planInstructions = agentCfg.SystemPrompt
 	o.instructionsSent = false
 
-	logger.log("========== SPECIFY INSTRUCTIONS ==========")
-	logger.log("%s", o.specifyInstructions)
-	logger.log("========== END SPECIFY INSTRUCTIONS ==========")
+	logger.log("========== PLAN INSTRUCTIONS ==========")
+	logger.log("%s", o.planInstructions)
+	logger.log("========== END PLAN INSTRUCTIONS ==========")
 
 	// Create agent instance
 	o.agent = agentpkg.NewAgent(agentCfg)
 
 	// Start agent (no MCP tools needed for now)
 	if err := o.agent.Start(o.ctx, []claude.McpTool{}, o.apiKey, agentCfg.ID); err != nil {
-		return fmt.Errorf("failed to start specify agent: %w", err)
+		return fmt.Errorf("failed to start plan agent: %w", err)
 	}
 
 	logger.log("Agent started successfully")
 	return nil
 }
 
-// MessageUpdate represents a streaming update from the agent
-type MessageUpdate struct {
-	Type    string // "text", "tool_use", "complete"
-	Content string
-}
-
-// maxRetries is the maximum number of times to retry on timeout
-const maxRetries = 3
-
-// retryDelay is the delay between retry attempts
-const retryDelay = 2 * time.Second
-
 // SendMessage sends a user message to the agent and returns streaming updates
-func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate, <-chan error) {
+func (o *PlanOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate, <-chan error) {
 	updateChan := make(chan MessageUpdate, 100)
 	errorChan := make(chan error, 1)
 
@@ -147,10 +98,10 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 		// Build the message to send
 		messageToSend := userMessage
 
-		// If this is the first message, prepend the specify instructions
-		if !o.instructionsSent && o.specifyInstructions != "" {
-			logger.log("Prepending specify instructions to first message")
-			messageToSend = o.specifyInstructions + "\n\n---\n\n## User Request\n\n" + userMessage
+		// If this is the first message, prepend the plan instructions
+		if !o.instructionsSent && o.planInstructions != "" {
+			logger.log("Prepending plan instructions to first message")
+			messageToSend = o.planInstructions + "\n\n---\n\n## User Request\n\n" + userMessage
 			o.instructionsSent = true
 		}
 
@@ -277,7 +228,7 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 							messageID := assistantMsg.Message.ID
 							logger.log("Assistant message ID: %s (current: %s)", messageID, currentMessageID)
 							logger.log("Assistant message has %d content blocks", len(assistantMsg.Message.Content))
-							logger.log("Stop reason: %s", assistantMsg.Message.StopReason)
+							logger.log("Stop reason: %v", assistantMsg.Message.StopReason)
 							logger.log("Stop sequence: %v", assistantMsg.Message.StopSequence)
 
 							// Check if this is a NEW message (different ID) - signals a new assistant turn
@@ -433,16 +384,8 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 	return updateChan, errorChan
 }
 
-// truncateForLog truncates a string for logging purposes
-func truncateForLog(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
-
 // Stop gracefully shuts down the orchestrator
-func (o *SpecifyOrchestrator) Stop() error {
+func (o *PlanOrchestrator) Stop() error {
 	o.cancel()
 
 	if o.agent != nil {
@@ -450,15 +393,4 @@ func (o *SpecifyOrchestrator) Stop() error {
 	}
 
 	return nil
-}
-
-// GetAPIKey gets the API key from environment or returns empty string
-func GetAPIKey() string {
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
-	if apiKey == "" {
-		// Try to use Claude Code's saved credentials
-		// The SDK will handle this automatically
-		return ""
-	}
-	return apiKey
 }

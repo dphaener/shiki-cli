@@ -63,6 +63,12 @@ func (m *Manager) SpawnAgent(ctx context.Context, cfg *types.Agent, mcpTools []c
 	return agent, nil
 }
 
+// maxTurnRetries is the maximum number of times to retry a turn on timeout
+const maxTurnRetries = 3
+
+// turnRetryDelay is the delay between retry attempts
+const turnRetryDelay = 2 * time.Second
+
 // StartTurn executes a single turn for the given agent
 func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumber int) (*TurnResult, error) {
 	m.mu.RLock()
@@ -82,147 +88,176 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 		return nil, fmt.Errorf("agent %s SDK client not initialized", agentID)
 	}
 
-	// Create timeout context (5 minute default)
-	turnCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-
-	// Inject turn number and agent ID into context for tool handlers
-	turnCtx = context.WithValue(turnCtx, "turn", turnNumber)
-	turnCtx = context.WithValue(turnCtx, "agent_id", agentID)
-
 	start := time.Now()
 
-	// Send query to agent via SDK
-	if err := client.Query(turnCtx, query); err != nil {
-		return nil, fmt.Errorf("failed to send query to agent: %w", err)
-	}
+	// Retry loop for handling timeouts
+	for attempt := 0; attempt <= maxTurnRetries; attempt++ {
+		if attempt > 0 {
+			// Brief delay before retry
+			time.Sleep(turnRetryDelay)
+		}
 
-	// Receive and collect response messages
-	msgChan, errChan := client.ReceiveMessages(turnCtx)
+		// Create timeout context (5 minute default)
+		turnCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 
-	var totalInputTokens, totalOutputTokens, toolCalls int
-	var responseText string
-	var lastError error
+		// Inject turn number and agent ID into context for tool handlers
+		turnCtx = context.WithValue(turnCtx, "turn", turnNumber)
+		turnCtx = context.WithValue(turnCtx, "agent_id", agentID)
 
-	for {
-		select {
-		case <-turnCtx.Done():
-			if lastError != nil {
-				return nil, fmt.Errorf("turn timeout or cancelled: %w", lastError)
-			}
-			return nil, fmt.Errorf("turn timeout exceeded")
+		// Send query to agent via SDK
+		if err := client.Query(turnCtx, query); err != nil {
+			cancel()
+			return nil, fmt.Errorf("failed to send query to agent: %w", err)
+		}
 
-		case err := <-errChan:
-			if err != nil {
-				lastError = err
-				// Continue to drain messages
-			}
+		// Receive and collect response messages
+		msgChan, errChan := client.ReceiveMessages(turnCtx)
 
-		case msg, ok := <-msgChan:
-			if !ok {
-				// Channel truly closed - query completed
-				goto done
-			}
+		var totalInputTokens, totalOutputTokens, toolCalls int
+		var responseText string
+		var lastError error
+		completed := false
+		shouldRetry := false
 
-			// Skip nil messages - SDK may send these during normal operation
-			if msg == nil {
-				continue
-			}
+	messageLoop:
+		for {
+			select {
+			case <-turnCtx.Done():
+				// Send interrupt to stop the current operation and clean up
+				if interruptErr := client.Interrupt(context.Background()); interruptErr != nil {
+					_ = interruptErr
+				}
+				// Check if we should retry
+				if attempt < maxTurnRetries {
+					shouldRetry = true
+					break messageLoop
+				}
+				// No more retries
+				cancel()
+				if lastError != nil {
+					return nil, fmt.Errorf("turn timeout after %d retries: %w", maxTurnRetries, lastError)
+				}
+				return nil, fmt.Errorf("turn timeout after %d retries", maxTurnRetries)
 
-			msgType := msg.Type()
+			case err := <-errChan:
+				if err != nil {
+					lastError = err
+					// Continue to drain messages
+				}
 
-			// Handle different message types
-			switch msgType {
-			case "assistant":
-				// Type assert to SDKAssistantMessage to access content
-				if assistantMsg, ok := msg.(*claude.SDKAssistantMessage); ok {
-					// Process each content block in the message
-					for _, block := range assistantMsg.Message.Content {
-						switch content := block.(type) {
-						case claude.TextContentBlock:
-							// Extract and emit text content for TUI display
-							if content.Text != "" {
-								m.eventBus.Publish(events.NewAssistantMessage(
+			case msg, ok := <-msgChan:
+				if !ok {
+					// Channel truly closed - query completed
+					completed = true
+					break messageLoop
+				}
+
+				// Skip nil messages - SDK may send these during normal operation
+				if msg == nil {
+					continue
+				}
+
+				msgType := msg.Type()
+
+				// Handle different message types
+				switch msgType {
+				case "assistant":
+					// Type assert to SDKAssistantMessage to access content
+					if assistantMsg, ok := msg.(*claude.SDKAssistantMessage); ok {
+						// Process each content block in the message
+						for _, block := range assistantMsg.Message.Content {
+							switch content := block.(type) {
+							case claude.TextContentBlock:
+								// Extract and emit text content for TUI display
+								if content.Text != "" {
+									m.eventBus.Publish(events.NewAssistantMessage(
+										agentID,
+										m.sessionID,
+										turnNumber,
+										content.Text,
+									))
+									responseText += content.Text
+								}
+
+							case claude.ToolUseContentBlock:
+								toolCalls++
+								// Strip mcp__ prefix for cleaner display
+								displayName := strings.TrimPrefix(content.Name, "mcp__collaboration__")
+
+								// Emit ToolInvoked event for TUI
+								m.eventBus.Publish(events.NewToolInvoked(
+									displayName,
 									agentID,
 									m.sessionID,
 									turnNumber,
-									content.Text,
+									nil, // We could parse content.Input if needed
 								))
-								responseText += content.Text
 							}
-
-						case claude.ToolUseContentBlock:
-							toolCalls++
-							// Strip mcp__ prefix for cleaner display
-							displayName := strings.TrimPrefix(content.Name, "mcp__collaboration__")
-
-							// Emit ToolInvoked event for TUI
-							m.eventBus.Publish(events.NewToolInvoked(
-								displayName,
-								agentID,
-								m.sessionID,
-								turnNumber,
-								nil, // We could parse content.Input if needed
-							))
 						}
+					} else {
+						// Fallback: if type assertion fails, use string representation
+						msgStr := fmt.Sprintf("%v", msg)
+						m.eventBus.Publish(events.NewAssistantMessage(
+							agentID,
+							m.sessionID,
+							turnNumber,
+							msgStr,
+						))
+						responseText += msgStr
 					}
-				} else {
-					// Fallback: if type assertion fails, use string representation
-					msgStr := fmt.Sprintf("%v", msg)
-					m.eventBus.Publish(events.NewAssistantMessage(
-						agentID,
-						m.sessionID,
-						turnNumber,
-						msgStr,
-					))
-					responseText += msgStr
-				}
 
-			case "result":
-				// Result message signals completion
-				goto done
+				case "result":
+					// Result message signals completion
+					completed = true
+					break messageLoop
+				}
+			}
+		}
+
+		cancel()
+
+		if completed {
+			duration := time.Since(start)
+
+			// Estimate token usage (this should come from SDK result messages)
+			totalTokens := totalInputTokens + totalOutputTokens
+			if totalTokens == 0 {
+				// Fallback estimate if SDK doesn't provide usage
+				totalTokens = len(query)/4 + len(responseText)/4
+				totalInputTokens = len(query) / 4
+				totalOutputTokens = len(responseText) / 4
 			}
 
-			// TODO: Extract token usage from SDK messages
-			// The SDK should provide usage info in result messages
-			// For now, we'll use estimates
+			// Calculate cost using detailed breakdown
+			cost := CalculateCostDetailed(totalInputTokens, totalOutputTokens, agent.Model)
+
+			result := &TurnResult{
+				AgentID:      agentID,
+				TurnNumber:   turnNumber,
+				Duration:     duration,
+				TokensUsed:   totalTokens,
+				InputTokens:  totalInputTokens,
+				OutputTokens: totalOutputTokens,
+				Cost:         cost,
+				Response:     responseText,
+				ToolCalls:    toolCalls,
+				Success:      lastError == nil,
+				Error:        "",
+			}
+
+			if lastError != nil {
+				result.Error = lastError.Error()
+			}
+
+			return result, lastError
+		}
+
+		if !shouldRetry {
+			return nil, fmt.Errorf("turn failed unexpectedly")
 		}
 	}
 
-done:
-	duration := time.Since(start)
-
-	// Estimate token usage (this should come from SDK result messages)
-	totalTokens := totalInputTokens + totalOutputTokens
-	if totalTokens == 0 {
-		// Fallback estimate if SDK doesn't provide usage
-		totalTokens = len(query)/4 + len(responseText)/4
-		totalInputTokens = len(query) / 4
-		totalOutputTokens = len(responseText) / 4
-	}
-
-	// Calculate cost using detailed breakdown
-	cost := CalculateCostDetailed(totalInputTokens, totalOutputTokens, agent.Model)
-
-	result := &TurnResult{
-		AgentID:      agentID,
-		TurnNumber:   turnNumber,
-		Duration:     duration,
-		TokensUsed:   totalTokens,
-		InputTokens:  totalInputTokens,
-		OutputTokens: totalOutputTokens,
-		Cost:         cost,
-		Response:     responseText,
-		ToolCalls:    toolCalls,
-		Success:      lastError == nil,
-		Error:        "",
-	}
-
-	if lastError != nil {
-		result.Error = lastError.Error()
-	}
-
-	return result, lastError
+	return nil, fmt.Errorf("turn failed after %d retries", maxTurnRetries)
 }
 
 // startHealthMonitoring begins periodic health checks for an agent

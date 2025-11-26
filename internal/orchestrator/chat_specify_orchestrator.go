@@ -156,118 +156,153 @@ func (o *ChatSpecifyOrchestrator) SendMessage(userMessage string) (<-chan Messag
 			o.broker.Publish(broker.NewTurnStartedEvent(o.session.ID, agentID, o.currentTurn))
 		}
 
-		// Create query context with timeout
-		queryCtx, cancel := context.WithTimeout(o.ctx, 3*time.Minute)
-		defer cancel()
+		// Retry loop for handling timeouts
+		for attempt := 0; attempt <= maxRetries; attempt++ {
+			if attempt > 0 {
+				// Brief delay before retry
+				time.Sleep(retryDelay)
+			}
 
-		// Send query to agent
-		if err := client.Query(queryCtx, userMessage); err != nil {
-			o.messageSvc.FinishStream(o.ctx, assistantMsg.ID, conversation.FinishReasonError, 0, 0)
-			errorChan <- fmt.Errorf("failed to send query: %w", err)
-			return
-		}
+			// Create query context with timeout for this attempt
+			queryCtx, cancel := context.WithTimeout(o.ctx, 3*time.Minute)
 
-		// Receive messages
-		msgChan, errChan := client.ReceiveMessages(queryCtx)
-
-		var responseBuilder strings.Builder
-		var inputTokens, outputTokens, toolCalls int
-
-		for {
-			select {
-			case <-queryCtx.Done():
-				o.messageSvc.FinishStream(o.ctx, assistantMsg.ID, conversation.FinishReasonError, inputTokens, outputTokens)
-				if queryCtx.Err() != nil {
-					errorChan <- fmt.Errorf("query timeout: %w", queryCtx.Err())
-				}
+			// Send query to agent
+			if err := client.Query(queryCtx, userMessage); err != nil {
+				cancel()
+				o.messageSvc.FinishStream(o.ctx, assistantMsg.ID, conversation.FinishReasonError, 0, 0)
+				errorChan <- fmt.Errorf("failed to send query: %w", err)
 				return
+			}
 
-			case err := <-errChan:
-				if err != nil {
-					o.messageSvc.FinishStream(o.ctx, assistantMsg.ID, conversation.FinishReasonError, inputTokens, outputTokens)
-					errorChan <- err
-				}
-				return
+			// Receive messages
+			msgChan, errChan := client.ReceiveMessages(queryCtx)
 
-			case msg, ok := <-msgChan:
-				if !ok || msg == nil {
-					// Channel closed, send completion signal
-					o.finishMessage(assistantMsg.ID, responseBuilder.String(), inputTokens, outputTokens, toolCalls)
-					if responseBuilder.Len() > 0 {
-						updateChan <- MessageUpdate{
-							Type:    "complete",
-							Content: responseBuilder.String(),
+			var responseBuilder strings.Builder
+			var inputTokens, outputTokens, toolCalls int
+			completed := false
+			shouldRetry := false
+
+		messageLoop:
+			for {
+				select {
+				case <-queryCtx.Done():
+					if queryCtx.Err() != nil {
+						// Send interrupt to stop the current operation and clean up
+						if interruptErr := client.Interrupt(context.Background()); interruptErr != nil {
+							_ = interruptErr
 						}
+						// Check if we should retry
+						if attempt < maxRetries {
+							shouldRetry = true
+							break messageLoop
+						}
+						// No more retries, finish with error
+						o.messageSvc.FinishStream(o.ctx, assistantMsg.ID, conversation.FinishReasonError, inputTokens, outputTokens)
+						errorChan <- fmt.Errorf("query timeout after %d retries: %w", maxRetries, queryCtx.Err())
 					}
+					cancel()
 					return
-				}
 
-				// Process message based on type
-				msgType := msg.Type()
+				case err := <-errChan:
+					if err != nil {
+						cancel()
+						o.messageSvc.FinishStream(o.ctx, assistantMsg.ID, conversation.FinishReasonError, inputTokens, outputTokens)
+						errorChan <- err
+						return
+					}
 
-				switch msgType {
-				case "assistant":
-					if assistantSDKMsg, ok := msg.(*claude.SDKAssistantMessage); ok {
-						// Process each content block
-						for _, block := range assistantSDKMsg.Message.Content {
-							switch content := block.(type) {
-							case claude.TextContentBlock:
-								if content.Text != "" {
-									responseBuilder.WriteString(content.Text)
+				case msg, ok := <-msgChan:
+					if !ok || msg == nil {
+						// Channel closed, send completion signal
+						o.finishMessage(assistantMsg.ID, responseBuilder.String(), inputTokens, outputTokens, toolCalls)
+						if responseBuilder.Len() > 0 {
+							updateChan <- MessageUpdate{
+								Type:    "complete",
+								Content: responseBuilder.String(),
+							}
+						}
+						completed = true
+						break messageLoop
+					}
 
-									// Append to streaming message
-									o.messageSvc.AppendDelta(o.ctx, assistantMsg.ID, content.Text)
+					// Process message based on type
+					msgType := msg.Type()
+
+					switch msgType {
+					case "assistant":
+						if assistantSDKMsg, ok := msg.(*claude.SDKAssistantMessage); ok {
+							// Process each content block
+							for _, block := range assistantSDKMsg.Message.Content {
+								switch content := block.(type) {
+								case claude.TextContentBlock:
+									if content.Text != "" {
+										responseBuilder.WriteString(content.Text)
+
+										// Append to streaming message
+										o.messageSvc.AppendDelta(o.ctx, assistantMsg.ID, content.Text)
+
+										// Send legacy update
+										updateChan <- MessageUpdate{
+											Type:    "text",
+											Content: content.Text,
+										}
+									}
+
+								case claude.ToolUseContentBlock:
+									toolCalls++
+									displayName := strings.TrimPrefix(content.Name, "mcp__")
+
+									// Add tool call part to message
+									toolCallPart := conversation.NewToolCallPart(content.ID, displayName, nil)
+									o.messageSvc.AddPart(o.ctx, assistantMsg.ID, toolCallPart)
 
 									// Send legacy update
 									updateChan <- MessageUpdate{
-										Type:    "text",
-										Content: content.Text,
+										Type:    "tool_use",
+										Content: displayName,
 									}
 								}
+							}
 
-							case claude.ToolUseContentBlock:
-								toolCalls++
-								displayName := strings.TrimPrefix(content.Name, "mcp__")
-
-								// Add tool call part to message
-								toolCallPart := conversation.NewToolCallPart(content.ID, displayName, nil)
-								o.messageSvc.AddPart(o.ctx, assistantMsg.ID, toolCallPart)
-
-								// Send legacy update
-								updateChan <- MessageUpdate{
-									Type:    "tool_use",
-									Content: displayName,
-								}
+							// Extract token usage
+							usage := assistantSDKMsg.Message.Usage
+							if usage.InputTokens > 0 || usage.OutputTokens > 0 {
+								inputTokens = usage.InputTokens
+								outputTokens = usage.OutputTokens
 							}
 						}
 
-						// Extract token usage
-						usage := assistantSDKMsg.Message.Usage
-						if usage.InputTokens > 0 || usage.OutputTokens > 0 {
-							inputTokens = usage.InputTokens
-							outputTokens = usage.OutputTokens
+					case "result":
+						// Result message signals completion
+						if resultMsg, ok := msg.(*claude.SDKResultMessage); ok {
+							usage := resultMsg.Usage
+							if usage.InputTokens > 0 || usage.OutputTokens > 0 {
+								inputTokens = usage.InputTokens
+								outputTokens = usage.OutputTokens
+							}
 						}
-					}
 
-				case "result":
-					// Result message signals completion
-					if resultMsg, ok := msg.(*claude.SDKResultMessage); ok {
-						usage := resultMsg.Usage
-						if usage.InputTokens > 0 || usage.OutputTokens > 0 {
-							inputTokens = usage.InputTokens
-							outputTokens = usage.OutputTokens
+						o.finishMessage(assistantMsg.ID, responseBuilder.String(), inputTokens, outputTokens, toolCalls)
+						if responseBuilder.Len() > 0 {
+							updateChan <- MessageUpdate{
+								Type:    "complete",
+								Content: responseBuilder.String(),
+							}
 						}
+						completed = true
+						break messageLoop
 					}
-
-					o.finishMessage(assistantMsg.ID, responseBuilder.String(), inputTokens, outputTokens, toolCalls)
-					if responseBuilder.Len() > 0 {
-						updateChan <- MessageUpdate{
-							Type:    "complete",
-							Content: responseBuilder.String(),
-						}
-					}
-					return
 				}
+			}
+
+			cancel()
+
+			if completed {
+				return
+			}
+
+			if !shouldRetry {
+				return
 			}
 		}
 	}()

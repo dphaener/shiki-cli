@@ -1,7 +1,0 @@
-{
-  "feature_number": "001",
-  "slug": "001-multi-agent-collaboration",
-  "friendly_name": "Multi-Agent Collaboration CLI",
-  "source_description": "Complete Go-based CLI tool for orchestrating two AI agents collaborating on complex tasks through file-based communication, turn-based execution, and real-time terminal UI monitoring",
-  "created_at": "2025-11-23T20:15:22Z"
-}

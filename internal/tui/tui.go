@@ -79,3 +79,28 @@ func RunSpecifyMode(session *types.SpecifySession) error {
 
 	return nil
 }
+
+// RunPlanMode starts the TUI in plan mode
+func RunPlanMode(session *types.PlanSession) error {
+	if session == nil {
+		return fmt.Errorf("plan session cannot be nil")
+	}
+
+	// Create plan model
+	model := NewPlanModel(session)
+
+	// Create Bubbletea program
+	p := tea.NewProgram(
+		model,
+		tea.WithAltScreen(),       // Use alternate screen buffer
+		tea.WithMouseCellMotion(), // Enable mouse support
+	)
+
+	// Run the program
+	_, err := p.Run()
+	if err != nil {
+		return fmt.Errorf("plan TUI error: %w", err)
+	}
+
+	return nil
+}

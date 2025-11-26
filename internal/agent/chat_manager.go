@@ -100,21 +100,13 @@ func (m *ChatManager) StartTurn(ctx context.Context, agentID, query string, turn
 		return nil, fmt.Errorf("agent %s SDK client not initialized", agentID)
 	}
 
-	// Create timeout context (5 minute default)
-	turnCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-
-	// Inject turn number and agent ID into context for tool handlers
-	turnCtx = context.WithValue(turnCtx, "turn", turnNumber)
-	turnCtx = context.WithValue(turnCtx, "agent_id", agentID)
-
 	start := time.Now()
 
 	// Emit turn started event
 	m.emitTurnStarted(agentID, turnNumber)
 
 	// Start a streaming message for this turn
-	msg, err := m.messageSvc.StartStream(turnCtx, m.sessionID, agentID, turnNumber)
+	msg, err := m.messageSvc.StartStream(ctx, m.sessionID, agentID, turnNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start stream: %w", err)
 	}
@@ -124,190 +116,232 @@ func (m *ChatManager) StartTurn(ctx context.Context, agentID, query string, turn
 	m.streamingMsgs[agentID] = msg.ID
 	m.streamMu.Unlock()
 
-	// Send query to agent via SDK
-	if err := client.Query(turnCtx, query); err != nil {
-		m.finishStream(turnCtx, msg.ID, conversation.FinishReasonError, 0, 0)
-		return nil, fmt.Errorf("failed to send query to agent: %w", err)
-	}
+	// Retry loop for handling timeouts
+	for attempt := 0; attempt <= maxTurnRetries; attempt++ {
+		if attempt > 0 {
+			// Brief delay before retry
+			time.Sleep(turnRetryDelay)
+		}
 
-	// Receive and collect response messages
-	msgChan, errChan := client.ReceiveMessages(turnCtx)
+		// Create timeout context (5 minute default)
+		turnCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 
-	var totalInputTokens, totalOutputTokens, toolCalls int
-	var responseText strings.Builder
-	var lastError error
-	var receivedResult bool
+		// Inject turn number and agent ID into context for tool handlers
+		turnCtx = context.WithValue(turnCtx, "turn", turnNumber)
+		turnCtx = context.WithValue(turnCtx, "agent_id", agentID)
 
-	for {
-		select {
-		case <-turnCtx.Done():
-			m.finishStream(turnCtx, msg.ID, conversation.FinishReasonError, totalInputTokens, totalOutputTokens)
-			if lastError != nil {
-				return nil, fmt.Errorf("turn timeout or cancelled: %w", lastError)
-			}
-			return nil, fmt.Errorf("turn timeout exceeded")
+		// Send query to agent via SDK
+		if err := client.Query(turnCtx, query); err != nil {
+			cancel()
+			m.finishStream(turnCtx, msg.ID, conversation.FinishReasonError, 0, 0)
+			return nil, fmt.Errorf("failed to send query to agent: %w", err)
+		}
 
-		case err := <-errChan:
-			if err != nil {
-				lastError = err
-				// Continue to drain messages - don't exit immediately
-			}
+		// Receive and collect response messages
+		msgChan, errChan := client.ReceiveMessages(turnCtx)
 
-		case sdkMsg, ok := <-msgChan:
-			if !ok {
-				// Channel truly closed - check if we have an error
-				if lastError != nil {
-					m.finishStream(turnCtx, msg.ID, conversation.FinishReasonError, totalInputTokens, totalOutputTokens)
-					return nil, lastError
+		var totalInputTokens, totalOutputTokens, toolCalls int
+		var responseText strings.Builder
+		var lastError error
+		var receivedResult bool
+		completed := false
+		shouldRetry := false
+
+	messageLoop:
+		for {
+			select {
+			case <-turnCtx.Done():
+				// Send interrupt to stop the current operation and clean up
+				if interruptErr := client.Interrupt(context.Background()); interruptErr != nil {
+					_ = interruptErr
 				}
-				// Normal completion (channel closed without result message)
-				goto done
-			}
+				// Check if we should retry
+				if attempt < maxTurnRetries {
+					shouldRetry = true
+					break messageLoop
+				}
+				// No more retries
+				m.finishStream(turnCtx, msg.ID, conversation.FinishReasonError, totalInputTokens, totalOutputTokens)
+				cancel()
+				if lastError != nil {
+					return nil, fmt.Errorf("turn timeout after %d retries: %w", maxTurnRetries, lastError)
+				}
+				return nil, fmt.Errorf("turn timeout after %d retries", maxTurnRetries)
 
-			// Skip nil messages - SDK may send these during normal operation
-			if sdkMsg == nil {
-				continue
-			}
+			case err := <-errChan:
+				if err != nil {
+					lastError = err
+					// Continue to drain messages - don't exit immediately
+				}
 
-			msgType := sdkMsg.Type()
+			case sdkMsg, ok := <-msgChan:
+				if !ok {
+					// Channel truly closed - check if we have an error
+					if lastError != nil {
+						m.finishStream(turnCtx, msg.ID, conversation.FinishReasonError, totalInputTokens, totalOutputTokens)
+						cancel()
+						return nil, lastError
+					}
+					// Normal completion (channel closed without result message)
+					completed = true
+					break messageLoop
+				}
 
-			switch msgType {
-			case "assistant":
-				if assistantMsg, ok := sdkMsg.(*claude.SDKAssistantMessage); ok {
-					for _, block := range assistantMsg.Message.Content {
-						switch content := block.(type) {
-						case claude.TextContentBlock:
-							if content.Text != "" {
-								// Append to streaming message
-								m.messageSvc.AppendDelta(turnCtx, msg.ID, content.Text)
-								responseText.WriteString(content.Text)
+				// Skip nil messages - SDK may send these during normal operation
+				if sdkMsg == nil {
+					continue
+				}
+
+				msgType := sdkMsg.Type()
+
+				switch msgType {
+				case "assistant":
+					if assistantMsg, ok := sdkMsg.(*claude.SDKAssistantMessage); ok {
+						for _, block := range assistantMsg.Message.Content {
+							switch content := block.(type) {
+							case claude.TextContentBlock:
+								if content.Text != "" {
+									// Append to streaming message
+									m.messageSvc.AppendDelta(turnCtx, msg.ID, content.Text)
+									responseText.WriteString(content.Text)
+
+									// Also emit to legacy bus
+									if m.legacyBus != nil {
+										m.legacyBus.Publish(events.NewAssistantMessage(
+											agentID,
+											m.sessionID,
+											turnNumber,
+											content.Text,
+										))
+									}
+								}
+
+							case claude.ToolUseContentBlock:
+								toolCalls++
+								displayName := strings.TrimPrefix(content.Name, "mcp__collaboration__")
+
+								// Extract tool arguments from JSONValue (json.RawMessage)
+								var toolArgs map[string]interface{}
+								if len(content.Input) > 0 {
+									if err := json.Unmarshal(content.Input, &toolArgs); err != nil {
+										// If unmarshal fails, store raw as string
+										toolArgs = map[string]interface{}{"_raw": string(content.Input)}
+									}
+								}
+
+								// Add tool call part to message
+								toolCallPart := conversation.NewToolCallPart(content.ID, displayName, toolArgs)
+								m.messageSvc.AddPart(turnCtx, msg.ID, toolCallPart)
 
 								// Also emit to legacy bus
 								if m.legacyBus != nil {
-									m.legacyBus.Publish(events.NewAssistantMessage(
+									m.legacyBus.Publish(events.NewToolInvoked(
+										displayName,
 										agentID,
 										m.sessionID,
 										turnNumber,
-										content.Text,
+										toolArgs,
 									))
 								}
 							}
+						}
 
-						case claude.ToolUseContentBlock:
-							toolCalls++
-							displayName := strings.TrimPrefix(content.Name, "mcp__collaboration__")
-
-							// Extract tool arguments from JSONValue (json.RawMessage)
-							var toolArgs map[string]interface{}
-							if len(content.Input) > 0 {
-								if err := json.Unmarshal(content.Input, &toolArgs); err != nil {
-									// If unmarshal fails, store raw as string
-									toolArgs = map[string]interface{}{"_raw": string(content.Input)}
-								}
-							}
-
-							// Add tool call part to message
-							toolCallPart := conversation.NewToolCallPart(content.ID, displayName, toolArgs)
-							m.messageSvc.AddPart(turnCtx, msg.ID, toolCallPart)
-
-							// Also emit to legacy bus
-							if m.legacyBus != nil {
-								m.legacyBus.Publish(events.NewToolInvoked(
-									displayName,
-									agentID,
-									m.sessionID,
-									turnNumber,
-									toolArgs,
-								))
-							}
+						// Extract token usage if available
+						usage := assistantMsg.Message.Usage
+						if usage.InputTokens > 0 || usage.OutputTokens > 0 {
+							totalInputTokens += usage.InputTokens
+							totalOutputTokens += usage.OutputTokens
 						}
 					}
 
-					// Extract token usage if available
-					usage := assistantMsg.Message.Usage
-					if usage.InputTokens > 0 || usage.OutputTokens > 0 {
-						totalInputTokens += usage.InputTokens
-						totalOutputTokens += usage.OutputTokens
+				case "result":
+					// Result message signals explicit completion
+					receivedResult = true
+
+					// Try to extract final token usage from result
+					if resultMsg, ok := sdkMsg.(*claude.SDKResultMessage); ok {
+						usage := resultMsg.Usage
+						if usage.InputTokens > 0 || usage.OutputTokens > 0 {
+							totalInputTokens = usage.InputTokens
+							totalOutputTokens = usage.OutputTokens
+						}
 					}
+
+					completed = true
+					break messageLoop
 				}
-
-			case "result":
-				// Result message signals explicit completion
-				receivedResult = true
-
-				// Try to extract final token usage from result
-				if resultMsg, ok := sdkMsg.(*claude.SDKResultMessage); ok {
-					usage := resultMsg.Usage
-					if usage.InputTokens > 0 || usage.OutputTokens > 0 {
-						totalInputTokens = usage.InputTokens
-						totalOutputTokens = usage.OutputTokens
-					}
-				}
-
-				goto done
 			}
+		}
+
+		cancel()
+
+		if completed {
+			duration := time.Since(start)
+
+			// Determine finish reason
+			finishReason := conversation.FinishReasonStop
+			if toolCalls > 0 {
+				finishReason = conversation.FinishReasonToolUse
+			}
+			if lastError != nil {
+				finishReason = conversation.FinishReasonError
+			}
+
+			// Finish the streaming message
+			m.finishStream(ctx, msg.ID, finishReason, totalInputTokens, totalOutputTokens)
+
+			// Clear streaming message tracking
+			m.streamMu.Lock()
+			delete(m.streamingMsgs, agentID)
+			m.streamMu.Unlock()
+
+			// Estimate token usage if SDK didn't provide it
+			totalTokens := totalInputTokens + totalOutputTokens
+			if totalTokens == 0 {
+				totalTokens = len(query)/4 + responseText.Len()/4
+				totalInputTokens = len(query) / 4
+				totalOutputTokens = responseText.Len() / 4
+			}
+
+			// Calculate cost
+			cost := CalculateCostDetailed(totalInputTokens, totalOutputTokens, agent.Model)
+
+			result := &TurnResult{
+				AgentID:      agentID,
+				TurnNumber:   turnNumber,
+				Duration:     duration,
+				TokensUsed:   totalTokens,
+				InputTokens:  totalInputTokens,
+				OutputTokens: totalOutputTokens,
+				Cost:         cost,
+				Response:     responseText.String(),
+				ToolCalls:    toolCalls,
+				Success:      lastError == nil,
+				Error:        "",
+			}
+
+			if lastError != nil {
+				result.Error = lastError.Error()
+			}
+
+			// Emit turn completed event
+			m.emitTurnCompleted(agentID, turnNumber, totalInputTokens, totalOutputTokens, cost, toolCalls, duration)
+
+			// Log completion status
+			if !receivedResult && lastError == nil {
+				// Channel closed without explicit result - this is OK but worth noting
+				// The SDK may close the channel after all content is sent
+			}
+
+			return result, lastError
+		}
+
+		if !shouldRetry {
+			return nil, fmt.Errorf("turn failed unexpectedly")
 		}
 	}
 
-done:
-	duration := time.Since(start)
-
-	// Determine finish reason
-	finishReason := conversation.FinishReasonStop
-	if toolCalls > 0 {
-		finishReason = conversation.FinishReasonToolUse
-	}
-	if lastError != nil {
-		finishReason = conversation.FinishReasonError
-	}
-
-	// Finish the streaming message
-	m.finishStream(turnCtx, msg.ID, finishReason, totalInputTokens, totalOutputTokens)
-
-	// Clear streaming message tracking
-	m.streamMu.Lock()
-	delete(m.streamingMsgs, agentID)
-	m.streamMu.Unlock()
-
-	// Estimate token usage if SDK didn't provide it
-	totalTokens := totalInputTokens + totalOutputTokens
-	if totalTokens == 0 {
-		totalTokens = len(query)/4 + responseText.Len()/4
-		totalInputTokens = len(query) / 4
-		totalOutputTokens = responseText.Len() / 4
-	}
-
-	// Calculate cost
-	cost := CalculateCostDetailed(totalInputTokens, totalOutputTokens, agent.Model)
-
-	result := &TurnResult{
-		AgentID:      agentID,
-		TurnNumber:   turnNumber,
-		Duration:     duration,
-		TokensUsed:   totalTokens,
-		InputTokens:  totalInputTokens,
-		OutputTokens: totalOutputTokens,
-		Cost:         cost,
-		Response:     responseText.String(),
-		ToolCalls:    toolCalls,
-		Success:      lastError == nil,
-		Error:        "",
-	}
-
-	if lastError != nil {
-		result.Error = lastError.Error()
-	}
-
-	// Emit turn completed event
-	m.emitTurnCompleted(agentID, turnNumber, totalInputTokens, totalOutputTokens, cost, toolCalls, duration)
-
-	// Log completion status
-	if !receivedResult && lastError == nil {
-		// Channel closed without explicit result - this is OK but worth noting
-		// The SDK may close the channel after all content is sent
-	}
-
-	return result, lastError
+	return nil, fmt.Errorf("turn failed after %d retries", maxTurnRetries)
 }
 
 // finishStream finishes a streaming message.
