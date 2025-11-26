@@ -395,15 +395,11 @@ func (c *ChatView) AddWelcomeMessage(featureName string, hasDescription bool) {
 	if hasDescription {
 		welcome = fmt.Sprintf(`# Welcome to Feature Specification
 
-I'll help you create a comprehensive specification for: **%s**
-
-I'll ask you a few clarifying questions to understand the full scope and requirements, then generate a structured specification document.`, featureName)
+I'll help you create a comprehensive specification for: **%s**`, featureName)
 	} else {
 		welcome = `# Welcome to Feature Specification
 
-I'll help you create a comprehensive specification for your feature.
-
-To get started, please tell me: **What feature would you like to specify today?** Give me a brief description of what you're building.`
+I'll help you create a comprehensive specification for your feature.`
 	}
 
 	c.AddMessage(types.ChatMessage{
