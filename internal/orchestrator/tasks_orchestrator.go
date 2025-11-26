@@ -148,9 +148,7 @@ func (o *TasksOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdat
 					logger.log("Context done: %v", queryCtx.Err())
 					if queryCtx.Err() != nil {
 						logger.log("Sending interrupt to clean up after timeout...")
-						if interruptErr := client.Interrupt(context.Background()); interruptErr != nil {
-							logger.log("Interrupt failed (may be expected): %v", interruptErr)
-						}
+						interruptClient(client, logger)
 						if attempt < maxRetries {
 							logger.log("Will retry after timeout (attempt %d/%d)", attempt+1, maxRetries)
 							shouldRetry = true

@@ -175,6 +175,45 @@ const maxRetries = 3
 // retryDelay is the delay between retry attempts
 const retryDelay = 2 * time.Second
 
+// interruptTimeout is the maximum time to wait for an interrupt call to complete.
+// If the SDK's Interrupt method hangs, we don't want to block forever.
+const interruptTimeout = 10 * time.Second
+
+// interruptClient attempts to interrupt the SDK client with a timeout.
+// This prevents hanging if the SDK's Interrupt method blocks.
+// Returns true if interrupt succeeded, false if it timed out or failed.
+func interruptClient(client sdkClient, logger *debugLogger) bool {
+	// Create a timeout context for the interrupt
+	ctx, cancel := context.WithTimeout(context.Background(), interruptTimeout)
+	defer cancel()
+
+	// Channel to signal interrupt completion
+	done := make(chan error, 1)
+	go func() {
+		done <- client.Interrupt(ctx)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			if logger != nil {
+				logger.log("Interrupt failed (may be expected): %v", err)
+			}
+		}
+		return err == nil
+	case <-ctx.Done():
+		if logger != nil {
+			logger.log("Interrupt timed out after %v - forcing continuation", interruptTimeout)
+		}
+		return false
+	}
+}
+
+// sdkClient interface for interrupt capability (allows testing)
+type sdkClient interface {
+	Interrupt(ctx context.Context) error
+}
+
 // SendMessage sends a user message to the agent and returns streaming updates
 func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate, <-chan error) {
 	updateChan := make(chan MessageUpdate, 100)
@@ -253,9 +292,7 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 					if queryCtx.Err() != nil {
 						// Send interrupt to stop the current operation and clean up
 						logger.log("Sending interrupt to clean up after timeout...")
-						if interruptErr := client.Interrupt(context.Background()); interruptErr != nil {
-							logger.log("Interrupt failed (may be expected): %v", interruptErr)
-						}
+						interruptClient(client, logger)
 						// Check if we should retry
 						if attempt < maxRetries {
 							logger.log("Will retry after timeout (attempt %d/%d)", attempt+1, maxRetries)

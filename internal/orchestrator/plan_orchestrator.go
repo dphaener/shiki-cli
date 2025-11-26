@@ -151,9 +151,7 @@ func (o *PlanOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate
 					if queryCtx.Err() != nil {
 						// Send interrupt to stop the current operation and clean up
 						logger.log("Sending interrupt to clean up after timeout...")
-						if interruptErr := client.Interrupt(context.Background()); interruptErr != nil {
-							logger.log("Interrupt failed (may be expected): %v", interruptErr)
-						}
+						interruptClient(client, logger)
 						// Check if we should retry
 						if attempt < maxRetries {
 							logger.log("Will retry after timeout (attempt %d/%d)", attempt+1, maxRetries)

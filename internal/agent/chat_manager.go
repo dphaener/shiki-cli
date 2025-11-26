@@ -152,10 +152,8 @@ func (m *ChatManager) StartTurn(ctx context.Context, agentID, query string, turn
 		for {
 			select {
 			case <-turnCtx.Done():
-				// Send interrupt to stop the current operation and clean up
-				if interruptErr := client.Interrupt(context.Background()); interruptErr != nil {
-					_ = interruptErr
-				}
+				// Send interrupt to stop the current operation and clean up (with timeout)
+				interruptClientWithTimeout(client)
 				// Check if we should retry
 				if attempt < maxTurnRetries {
 					shouldRetry = true

@@ -72,6 +72,38 @@ const maxTurnRetries = 3
 // turnRetryDelay is the delay between retry attempts
 const turnRetryDelay = 2 * time.Second
 
+// interruptTimeout is the maximum time to wait for an interrupt call to complete.
+// If the SDK's Interrupt method hangs, we don't want to block forever.
+const interruptTimeout = 10 * time.Second
+
+// sdkInterruptable interface for SDK clients that support interrupt
+type sdkInterruptable interface {
+	Interrupt(ctx context.Context) error
+}
+
+// interruptClientWithTimeout attempts to interrupt the SDK client with a timeout.
+// This prevents hanging if the SDK's Interrupt method blocks.
+func interruptClientWithTimeout(client sdkInterruptable) {
+	// Create a timeout context for the interrupt
+	ctx, cancel := context.WithTimeout(context.Background(), interruptTimeout)
+	defer cancel()
+
+	// Channel to signal interrupt completion
+	done := make(chan error, 1)
+	go func() {
+		done <- client.Interrupt(ctx)
+	}()
+
+	select {
+	case <-done:
+		// Interrupt completed (success or failure)
+		return
+	case <-ctx.Done():
+		// Interrupt timed out - force continue
+		return
+	}
+}
+
 // StartTurn executes a single turn for the given agent
 func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumber int) (*TurnResult, error) {
 	m.mu.RLock()
@@ -126,10 +158,8 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 		for {
 			select {
 			case <-turnCtx.Done():
-				// Send interrupt to stop the current operation and clean up
-				if interruptErr := client.Interrupt(context.Background()); interruptErr != nil {
-					_ = interruptErr
-				}
+				// Send interrupt to stop the current operation and clean up (with timeout)
+				interruptClientWithTimeout(client)
 				// Check if we should retry
 				if attempt < maxTurnRetries {
 					shouldRetry = true
