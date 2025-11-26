@@ -100,6 +100,7 @@ func NewModel(session *types.Session, bus *events.EventBus) Model {
 		TotalTokens:  session.Agent1.TotalTokens,
 		Outputs:      make([]components.OutputEntry, 0),
 		ScrollOffset: 0,
+		AutoScroll:   true, // Start with autoscroll enabled
 	}
 
 	agentOutputs[session.Agent2.ID] = &components.AgentOutputState{
@@ -110,6 +111,7 @@ func NewModel(session *types.Session, bus *events.EventBus) Model {
 		TotalTokens:  session.Agent2.TotalTokens,
 		Outputs:      make([]components.OutputEntry, 0),
 		ScrollOffset: 0,
+		AutoScroll:   true, // Start with autoscroll enabled
 	}
 
 	return Model{

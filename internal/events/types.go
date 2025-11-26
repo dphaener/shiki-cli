@@ -6,7 +6,9 @@ import (
 	"github.com/darinhaener/collab/pkg/types"
 )
 
-// Event wraps typed events with common metadata
+// Event wraps typed events with common metadata.
+//
+// Deprecated: Use broker.Event interface and typed events from internal/broker instead.
 type Event struct {
 	Type      types.EventType
 	SessionID string

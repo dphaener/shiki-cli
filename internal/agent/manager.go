@@ -118,10 +118,15 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 				// Continue to drain messages
 			}
 
-		case msg := <-msgChan:
-			if msg == nil {
-				// Query completed
+		case msg, ok := <-msgChan:
+			if !ok {
+				// Channel truly closed - query completed
 				goto done
+			}
+
+			// Skip nil messages - SDK may send these during normal operation
+			if msg == nil {
+				continue
 			}
 
 			msgType := msg.Type()

@@ -4,12 +4,22 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
-// OutputEntryType identifies the type of output entry
+// AgentOutputState and related types are deprecated.
+// Use MessageListState and conversation.Message with Parts instead.
+//
+// Migration guide:
+//   - Replace AgentOutputState with MessageListState
+//   - Replace OutputEntry with conversation.Message containing Parts
+//   - Use RenderMessageList() instead of RenderAgentOutput()
+//   - Use RenderPart() for individual part rendering
+
+// OutputEntryType identifies the type of output entry.
+//
+// Deprecated: Use conversation.PartType instead.
 type OutputEntryType string
 
 const (
@@ -33,6 +43,7 @@ type AgentOutputState struct {
 	TotalTokens  int
 	Outputs      []OutputEntry
 	ScrollOffset int
+	AutoScroll   bool // When true, automatically scroll to show latest content
 }
 
 // Styles for agent output
@@ -67,30 +78,10 @@ var (
 			Foreground(lipgloss.Color("196")).
 			Bold(true).
 			Render("✗")
-
-	// Markdown renderer for assistant messages
-	markdownRenderer *glamour.TermRenderer
 )
 
-// getMarkdownRenderer returns a lazily-initialized markdown renderer
-func getMarkdownRenderer(width int) *glamour.TermRenderer {
-	if markdownRenderer == nil {
-		var err error
-		// Use a dark style optimized for terminals
-		markdownRenderer, err = glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
-			glamour.WithWordWrap(width),
-		)
-		if err != nil {
-			// If we can't create a renderer, return nil and fall back to plain text
-			return nil
-		}
-	}
-	return markdownRenderer
-}
-
 // RenderAgentOutput renders an agent's conversation output pane
-func RenderAgentOutput(state AgentOutputState, width, height int, isActive bool) string {
+func RenderAgentOutput(state *AgentOutputState, width, height int, isActive bool) string {
 	// Determine border style based on active state
 	borderStyle := paneBorderStyle
 	if isActive {
@@ -98,7 +89,7 @@ func RenderAgentOutput(state AgentOutputState, width, height int, isActive bool)
 	}
 
 	// Build header with agent info
-	header := buildAgentHeader(state)
+	header := buildAgentHeader(*state)
 
 	// Build output content
 	contentHeight := height - 7 // Account for borders, header (3 lines), and padding
@@ -153,7 +144,7 @@ func buildAgentHeader(state AgentOutputState) string {
 }
 
 // buildAgentContent creates the scrollable output content
-func buildAgentContent(state AgentOutputState, width, height int) string {
+func buildAgentContent(state *AgentOutputState, width, height int) string {
 	if len(state.Outputs) == 0 {
 		return agentMetadataStyle.Render("  Waiting for agent activity...")
 	}
@@ -169,20 +160,29 @@ func buildAgentContent(state AgentOutputState, width, height int) string {
 
 	totalLines := len(allRenderedLines)
 
-	// Calculate visible range - auto-scroll to bottom
-	startIdx := state.ScrollOffset
-	if totalLines > height {
-		// If scroll offset suggests we want to see the end, show last 'height' lines
-		if startIdx >= totalLines - height {
+	// Calculate visible range
+	var startIdx int
+	if state.AutoScroll {
+		// Auto-scroll mode: always show the bottom
+		if totalLines > height {
 			startIdx = totalLines - height
+		} else {
+			startIdx = 0
 		}
 	} else {
-		// All content fits, start from beginning
-		startIdx = 0
-	}
+		// Manual scroll mode: use the scroll offset
+		startIdx = state.ScrollOffset
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		if startIdx > totalLines-height && totalLines > height {
+			startIdx = totalLines - height
+		}
 
-	if startIdx < 0 {
-		startIdx = 0
+		// Re-enable autoscroll if user has scrolled to the bottom
+		if totalLines <= height || startIdx >= totalLines-height {
+			state.AutoScroll = true
+		}
 	}
 
 	endIdx := startIdx + height
@@ -268,47 +268,9 @@ func formatMessage(text string, width int) string {
 		return ""
 	}
 
-	// Try to render as markdown
-	renderer := getMarkdownRenderer(width - 4) // Account for padding
-	if renderer != nil {
-		rendered, err := renderer.Render(text)
-		if err == nil {
-			// Apply style and return rendered markdown
-			return assistantMessageStyle.Render(strings.TrimSpace(rendered))
-		}
-	}
-
-	// Fallback: Simple word wrapping if markdown rendering fails
-	words := strings.Fields(text)
-	if len(words) == 0 {
-		return ""
-	}
-
-	var lines []string
-	var currentLine string
-
-	for _, word := range words {
-		testLine := currentLine
-		if testLine != "" {
-			testLine += " "
-		}
-		testLine += word
-
-		if len(testLine) > width-2 {
-			if currentLine != "" {
-				lines = append(lines, assistantMessageStyle.Render(currentLine))
-			}
-			currentLine = word
-		} else {
-			currentLine = testLine
-		}
-	}
-
-	if currentLine != "" {
-		lines = append(lines, assistantMessageStyle.Render(currentLine))
-	}
-
-	return strings.Join(lines, "\n")
+	// Use shared markdown renderer with proper width handling
+	renderer := GetMarkdownRenderer()
+	return renderer.RenderWithStyle(text, width-4, assistantMessageStyle)
 }
 
 // truncateString truncates a string to the specified length

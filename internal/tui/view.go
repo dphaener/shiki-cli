@@ -46,7 +46,7 @@ func (m Model) renderAgentView() string {
 	for i, agentID := range m.activeAgents {
 		if agentState, exists := m.agentOutputs[agentID]; exists {
 			isActive := i == m.selectedAgent
-			pane := components.RenderAgentOutput(*agentState, agentPaneWidth, paneHeight, isActive)
+			pane := components.RenderAgentOutput(agentState, agentPaneWidth, paneHeight, isActive)
 			agentPanes = append(agentPanes, pane)
 		}
 	}
@@ -59,33 +59,6 @@ func (m Model) renderAgentView() string {
 		// Fallback if no agents
 		panes = "No active agents"
 	}
-
-	// OLD PANE RENDERING (Preserved for future use)
-	// Split width for two panes (50/50 split)
-	// leftWidth := m.width / 2
-	// rightWidth := m.width - leftWidth
-	//
-	// Render left pane (turn history)
-	// leftPane := components.RenderTurnList(
-	// 	m.turnHistory,
-	// 	m.selectedTurn,
-	// 	leftWidth,
-	// 	paneHeight,
-	// 	m.selectedPane == "turns",
-	// )
-	//
-	// Render right pane (file viewer)
-	// rightPane := components.RenderFileViewer(
-	// 	m.fileContent,
-	// 	m.currentFile,
-	// 	rightWidth,
-	// 	paneHeight,
-	// 	m.scrollOffset,
-	// 	m.selectedPane == "file",
-	// )
-	//
-	// Join panes horizontally
-	// panes := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 
 	// Get most recent tool activity
 	recentTool := ""

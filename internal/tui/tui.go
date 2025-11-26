@@ -54,3 +54,28 @@ func IsPausedError(err error) bool {
 	_, ok := err.(*PausedError)
 	return ok
 }
+
+// RunSpecifyMode starts the TUI in specify mode
+func RunSpecifyMode(session *types.SpecifySession) error {
+	if session == nil {
+		return fmt.Errorf("specify session cannot be nil")
+	}
+
+	// Create specify model
+	model := NewSpecifyModel(session)
+
+	// Create Bubbletea program
+	p := tea.NewProgram(
+		model,
+		tea.WithAltScreen(),       // Use alternate screen buffer
+		tea.WithMouseCellMotion(), // Enable mouse support
+	)
+
+	// Run the program
+	_, err := p.Run()
+	if err != nil {
+		return fmt.Errorf("specify TUI error: %w", err)
+	}
+
+	return nil
+}

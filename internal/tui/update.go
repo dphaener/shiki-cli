@@ -83,6 +83,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.selectedAgent >= 0 && m.selectedAgent < len(m.activeAgents) {
 				agentID := m.activeAgents[m.selectedAgent]
 				if agentState, exists := m.agentOutputs[agentID]; exists {
+					// Disable autoscroll when user manually scrolls up
+					agentState.AutoScroll = false
 					if agentState.ScrollOffset > 0 {
 						agentState.ScrollOffset--
 					}
@@ -101,6 +103,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				agentID := m.activeAgents[m.selectedAgent]
 				if agentState, exists := m.agentOutputs[agentID]; exists {
 					agentState.ScrollOffset++
+					// Note: AutoScroll will be re-enabled automatically in the
+					// render function if we've scrolled to the bottom
 				}
 			}
 		}
@@ -251,8 +255,7 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 				Timestamp: event.Timestamp.Format("15:04:05"),
 			}
 			agentState.Outputs = append(agentState.Outputs, entry)
-			// Set scroll offset to end to trigger auto-scroll to bottom
-			agentState.ScrollOffset = len(agentState.Outputs)
+			// AutoScroll will automatically show new content when enabled
 		}
 
 	case types.EventAssistantMessage:
@@ -265,8 +268,7 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 				Timestamp: event.Timestamp.Format("15:04:05"),
 			}
 			agentState.Outputs = append(agentState.Outputs, entry)
-			// Set scroll offset to end to trigger auto-scroll to bottom
-			agentState.ScrollOffset = len(agentState.Outputs)
+			// AutoScroll will automatically show new content when enabled
 		}
 
 	case types.EventSessionCompleted:

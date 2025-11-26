@@ -1,3 +1,14 @@
+// Package events provides the legacy event bus for backwards compatibility.
+//
+// Deprecated: Use internal/broker for new code. The broker package provides
+// typed events with proper payloads instead of interface{} payloads.
+// This package will be removed in a future version.
+//
+// Migration guide:
+//   - Replace events.EventBus with broker.Broker
+//   - Replace events.Event with broker.Event interface
+//   - Use typed event constructors like broker.NewMessageCreatedEvent()
+//   - Subscribe with broker.Subscribe() instead of EventBus.Subscribe()
 package events
 
 import (
@@ -7,7 +18,9 @@ import (
 	"github.com/darinhaener/collab/pkg/types"
 )
 
-// EventBus manages event distribution to subscribers using channels
+// EventBus manages event distribution to subscribers using channels.
+//
+// Deprecated: Use broker.Broker instead for typed event handling.
 type EventBus struct {
 	subscribers map[string]*Subscriber
 	mu          sync.RWMutex
