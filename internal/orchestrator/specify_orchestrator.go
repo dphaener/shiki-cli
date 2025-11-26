@@ -100,8 +100,8 @@ func (o *SpecifyOrchestrator) Initialize() error {
 	// Create agent instance
 	o.agent = agentpkg.NewAgent(agentCfg)
 
-	// Start agent (no MCP tools needed for now)
-	if err := o.agent.Start(o.ctx, []claude.McpTool{}, o.apiKey, agentCfg.ID); err != nil {
+	// Start agent (built-in tools only)
+	if err := o.agent.Start(o.ctx, o.apiKey, agentCfg.ID); err != nil {
 		return fmt.Errorf("failed to start specify agent: %w", err)
 	}
 
@@ -277,7 +277,7 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 							messageID := assistantMsg.Message.ID
 							logger.log("Assistant message ID: %s (current: %s)", messageID, currentMessageID)
 							logger.log("Assistant message has %d content blocks", len(assistantMsg.Message.Content))
-							logger.log("Stop reason: %s", assistantMsg.Message.StopReason)
+							logger.log("Stop reason: %v", assistantMsg.Message.StopReason)
 							logger.log("Stop sequence: %v", assistantMsg.Message.StopSequence)
 
 							// Check if this is a NEW message (different ID) - signals a new assistant turn

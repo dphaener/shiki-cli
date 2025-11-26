@@ -54,7 +54,7 @@ func TestManager_SpawnAgent_AlreadyExists(t *testing.T) {
 	mgr.agents["test_agent"] = NewAgent(cfg)
 
 	// Try to spawn the same agent again
-	agent, err := mgr.SpawnAgent(ctx, cfg, nil)
+	agent, err := mgr.SpawnAgent(ctx, cfg)
 	assert.Error(t, err)
 	assert.Nil(t, agent)
 	assert.Contains(t, err.Error(), "already spawned")
@@ -255,7 +255,7 @@ func TestManager_SpawnAgent_Integration(t *testing.T) {
 		WorkspaceDir: t.TempDir(),
 	}
 
-	agent, err := mgr.SpawnAgent(ctx, cfg, nil)
+	agent, err := mgr.SpawnAgent(ctx, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, agent)
 

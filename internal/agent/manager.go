@@ -12,6 +12,8 @@ import (
 	"github.com/darinhaener/collab/pkg/types"
 )
 
+// Note: claude import kept for SDK message types in StartTurn
+
 // Manager handles agent lifecycle, health monitoring, and turn execution
 type Manager struct {
 	agents    map[string]*Agent
@@ -36,8 +38,9 @@ func NewManager(eventBus *events.EventBus, sessionID, apiKey string) *Manager {
 	}
 }
 
-// SpawnAgent creates and starts a new agent subprocess with MCP tools
-func (m *Manager) SpawnAgent(ctx context.Context, cfg *types.Agent, mcpTools []claude.McpTool) (*Agent, error) {
+// SpawnAgent creates and starts a new agent subprocess
+// Note: MCP tools removed - agents use built-in tools only and communicate via files
+func (m *Manager) SpawnAgent(ctx context.Context, cfg *types.Agent) (*Agent, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -49,8 +52,8 @@ func (m *Manager) SpawnAgent(ctx context.Context, cfg *types.Agent, mcpTools []c
 	// Create agent instance
 	agent := NewAgent(cfg)
 
-	// Start agent process with SDK and MCP tools
-	if err := agent.Start(ctx, mcpTools, m.apiKey, cfg.ID); err != nil {
+	// Start agent process with SDK (built-in tools only)
+	if err := agent.Start(ctx, m.apiKey, cfg.ID); err != nil {
 		return nil, fmt.Errorf("failed to start agent %s: %w", cfg.ID, err)
 	}
 

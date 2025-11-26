@@ -5,7 +5,7 @@ agent1_system_prompt: "You propose simple solutions to problems. Keep responses 
 agent2_name: "Approver"
 agent2_role: "Review and approve"
 agent2_system_prompt: "You review proposals and approve if they meet requirements. Be critical but fair."
-max_turns: 2
+max_turns: 10
 ---
 
 # Simple Agreement Task

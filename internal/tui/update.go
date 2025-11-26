@@ -23,19 +23,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.filename != "" {
 			m.currentFile = msg.filename
 		}
-		return m, waitForEvent(m.eventSub)
+		// Only continue listening if session is still active
+		if m.session.Status == types.SessionRunning {
+			return m, waitForEvent(m.eventSub)
+		}
+		return m, nil
 
 	case deliverableContentMsg:
 		if msg.err != nil {
 			// Handle error - fallback to showing error message
 			m.deliverableContent = "Error loading deliverable: " + msg.err.Error()
+			m.deliverableRenderedContent = m.deliverableContent
 		} else {
 			m.deliverableContent = msg.content
+			// Start with raw content, glamour will render async
+			m.deliverableRenderedContent = msg.content
 		}
 		m.deliverablePath = msg.path
 		// Switch to completion view
 		m.viewMode = ViewModeCompletion
-		return m, waitForEvent(m.eventSub)
+		// Trigger async glamour rendering
+		return m, doRenderDeliverable(m.deliverableContent, m.width)
+
+	case deliverableRenderedMsg:
+		// Cache the glamour-rendered content
+		m.deliverableRenderedContent = msg.content
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -279,23 +292,28 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 		m.session.DeliverablePath = payload.DeliverablePath
 
 		// Load deliverable content and switch to completion view
-		return m, tea.Batch(
-			loadDeliverableContent(payload.DeliverablePath),
-			waitForEvent(m.eventSub),
-		)
+		// Don't wait for more events - session is complete
+		return m, loadDeliverableContent(payload.DeliverablePath)
 
 	case types.EventSessionPaused:
 		m.session.Status = types.SessionPaused
 		m.paused = true
+		// Don't wait for more events when paused
+		return m, nil
 
 	case types.EventSessionError:
 		payload := event.Payload.(events.SessionErrorPayload)
 		m.session.Status = types.SessionError
 		m.err = &pauseError{msg: payload.Error}
+		// Don't wait for more events on error
+		return m, nil
 	}
 
-	// Continue listening for events
-	return m, waitForEvent(m.eventSub)
+	// Continue listening for events (only if session is still active)
+	if m.session.Status == types.SessionRunning {
+		return m, waitForEvent(m.eventSub)
+	}
+	return m, nil
 }
 
 // Helper functions

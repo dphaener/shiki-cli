@@ -64,41 +64,74 @@ func (o *Orchestrator) ExecuteTurn(ctx context.Context, agentCfg *types.Agent) (
 }
 
 // buildQuery constructs the query/prompt for an agent's turn
+// It injects all collaboration context directly into the prompt
 func (o *Orchestrator) buildQuery(agentCfg *types.Agent) string {
-	// The query should include:
-	// 1. The agent's role and current context
-	// 2. Instructions to use MCP tools for collaboration
-	// 3. Reference to shared context and messages
+	// Read all context for injection
+	task, _ := o.ReadTask()
+	messages, _ := o.ReadPartnerMessages(agentCfg.ID)
+	sharedContext, _ := o.ReadSharedContext()
+	memory, _ := o.ReadAgentMemory(agentCfg.ID)
+	partnerName := o.GetPartnerName(agentCfg.ID)
+
+	turnNumber := o.session.CurrentTurn + 1
 
 	query := fmt.Sprintf(`You are %s, a %s.
 
-IMPORTANT: The full task description with requirements and deliverable format is in task.md in your workspace. Read it first!
+This is turn %d of %d. You are collaborating with %s.
 
-You are collaborating with your partner agent on this task. This is turn %d of %d.
+=== TASK ===
+%s
 
-You have access to the following MCP tools for collaboration (use the full tool names exactly as shown):
-- mcp__collaboration__send_message: Send a message to your partner
-- mcp__collaboration__read_messages: Read messages from your partner
-- mcp__collaboration__write_shared_context: Write to shared context (both agents can see)
-- mcp__collaboration__read_shared_context: Read shared context
-- mcp__collaboration__update_memory: Update your private memory
-- mcp__collaboration__read_memory: Read your private memory
-- mcp__collaboration__submit_deliverable: Submit the final deliverable when ready
+=== MESSAGES FROM YOUR PARTNER ===
+%s
 
-On your turn, please:
-1. FIRST: Read task.md to understand the task requirements and deliverable format
-2. Read any new messages from your partner using mcp__collaboration__read_messages
-3. Review the shared context using mcp__collaboration__read_shared_context
-4. Perform your role's responsibilities
-5. Communicate with your partner using mcp__collaboration__send_message as needed
-6. When the task is complete, submit a deliverable using mcp__collaboration__submit_deliverable
-   (BOTH agents must submit matching deliverables for the session to complete)
+=== SHARED CONTEXT ===
+%s
+
+=== YOUR PRIVATE MEMORY ===
+%s
+
+=== INSTRUCTIONS ===
+You have built-in tools (Read, Write, Edit, Glob, Grep, Bash) to work with files in your workspace.
+
+**File-Based Communication Protocol:**
+
+To send a message to your partner:
+  Use Write tool to create: messages/%s_turn_%02d.md
+  (Your partner will see it on their next turn)
+
+To update shared context (both agents can see):
+  Use Write tool to update: shared_context.md
+
+To update your private memory:
+  Use Write tool to update: memory/%s_memory.md
+
+To submit your final deliverable:
+  Use Write tool to create: %s_deliverable.md
+  (Session completes when BOTH agents submit matching deliverables)
+
+**On your turn:**
+1. Review the task, messages, shared context, and your memory (shown above)
+2. Perform your role's responsibilities
+3. Send a message to your partner if needed (write to messages/ directory)
+4. Update shared context if you have findings to share
+5. Update your memory to track your progress
+6. When the task is complete, submit your deliverable
 
 Begin your turn.`,
 		agentCfg.Name,
 		agentCfg.Role,
-		o.session.CurrentTurn+1,
+		turnNumber,
 		o.session.MaxTurns,
+		partnerName,
+		task,
+		messages,
+		sharedContext,
+		memory,
+		agentCfg.ID,
+		turnNumber,
+		agentCfg.ID,
+		agentCfg.ID,
 	)
 
 	return query

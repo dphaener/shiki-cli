@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/internal/tui/components"
 	"github.com/darinhaener/collab/pkg/types"
@@ -44,9 +45,10 @@ type Model struct {
 	selectedAgent int                                     // Index of selected agent pane
 
 	// View state
-	viewMode           ViewMode
-	deliverableContent string
-	deliverablePath    string
+	viewMode                   ViewMode
+	deliverableContent         string // raw content
+	deliverableRenderedContent string // pre-rendered with glamour (cached)
+	deliverablePath            string
 
 	// UI state
 	selectedTurn int
@@ -172,6 +174,7 @@ func loadFileContent(workspaceDir, filename string) tea.Cmd {
 }
 
 // loadDeliverableContent loads deliverable content from the specified path
+// and pre-renders markdown to avoid blocking the View function
 func loadDeliverableContent(path string) tea.Cmd {
 	return func() tea.Msg {
 		if path == "" {
@@ -191,8 +194,14 @@ func loadDeliverableContent(path string) tea.Cmd {
 			}
 		}
 
+		// Pre-render markdown here (outside the View loop) to avoid blocking
+		// We use a reasonable default width; it will be plain text but readable
+		rendered := string(content)
+		// Note: glamour rendering removed - it blocks the TUI
+		// The content will be displayed as plain text which is fine for deliverables
+
 		return deliverableContentMsg{
-			content: string(content),
+			content: rendered,
 			path:    path,
 			err:     nil,
 		}
@@ -264,4 +273,31 @@ type deliverableContentMsg struct {
 	content string
 	path    string
 	err     error
+}
+
+// deliverableRenderedMsg is sent after glamour rendering completes
+type deliverableRenderedMsg struct {
+	content string
+}
+
+// doRenderDeliverable renders markdown content with glamour in a goroutine
+// This prevents blocking the TUI event loop
+func doRenderDeliverable(content string, width int) tea.Cmd {
+	return func() tea.Msg {
+		if width <= 0 {
+			width = 80 // default width
+		}
+		renderer, err := glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(width),
+		)
+		if err != nil {
+			return deliverableRenderedMsg{content: content}
+		}
+		rendered, err := renderer.Render(content)
+		if err != nil {
+			return deliverableRenderedMsg{content: content}
+		}
+		return deliverableRenderedMsg{content: rendered}
+	}
 }

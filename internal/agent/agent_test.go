@@ -110,7 +110,7 @@ func TestAgent_Start_Integration(t *testing.T) {
 	ctx := context.Background()
 	apiKey := "test-api-key"
 
-	err := agent.Start(ctx, nil, apiKey, cfg.ID)
+	err := agent.Start(ctx, apiKey, cfg.ID)
 	require.NoError(t, err)
 
 	defer func() {

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/darinhaener/collab/internal/tui/theme"
 	"github.com/darinhaener/collab/pkg/types"
@@ -159,7 +158,8 @@ func buildSessionSummary(session *types.Session, deliverablePath string, width i
 	return strings.Join(lines, "\n")
 }
 
-// buildDeliverableContent renders the deliverable markdown content
+// buildDeliverableContent renders the deliverable content
+// Note: glamour markdown rendering removed as it blocks the TUI event loop
 func buildDeliverableContent(content string, width, height, scrollOffset int) string {
 	if content == "" {
 		emptyMsg := lipgloss.NewStyle().
@@ -169,25 +169,8 @@ func buildDeliverableContent(content string, width, height, scrollOffset int) st
 		return fmt.Sprintf("\n  %s\n", emptyMsg)
 	}
 
-	// Try to render as markdown
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(width),
-	)
-
-	var rendered string
-	if err == nil {
-		r, err := renderer.Render(content)
-		if err == nil {
-			rendered = r
-		} else {
-			// Fallback to plain text
-			rendered = content
-		}
-	} else {
-		// Fallback to plain text
-		rendered = content
-	}
+	// Use content as-is (plain text) - glamour rendering was blocking the TUI
+	rendered := content
 
 	// Split into lines for scrolling
 	lines := strings.Split(strings.TrimSpace(rendered), "\n")

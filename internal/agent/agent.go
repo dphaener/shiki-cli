@@ -36,24 +36,12 @@ func NewAgent(cfg *types.Agent) *Agent {
 	}
 }
 
-// Start initializes the agent subprocess with MCP tools
-func (a *Agent) Start(ctx context.Context, mcpTools []claude.McpTool, apiKey string, agentID string) error {
-	// Create SDK MCP server with the collaboration tools
-	mcpServer := claude.CreateSdkMcpServer(
-		"collaboration",
-		"1.0.0",
-		mcpTools,
-	)
-
-	// Build list of allowed tools (include both built-in and MCP tools)
+// Start initializes the agent subprocess with built-in tools only
+func (a *Agent) Start(ctx context.Context, apiKey string, agentID string) error {
+	// Only allow built-in tools - no MCP tools needed
+	// Agents communicate via file-based protocol instead
 	allowedTools := []string{
-		// Common built-in tools
 		"Read", "Write", "Edit", "Glob", "Grep", "Bash",
-	}
-	// Add MCP collaboration tools with full prefixed names
-	for _, tool := range mcpTools {
-		fullToolName := fmt.Sprintf("mcp__collaboration__%s", tool.Name())
-		allowedTools = append(allowedTools, fullToolName)
 	}
 
 	// Configure SDK options
@@ -68,9 +56,6 @@ func (a *Agent) Start(ctx context.Context, mcpTools []claude.McpTool, apiKey str
 			"AGENT_ID":          agentID,
 			"AGENT_NAME":        a.Name,
 			"AGENT_ROLE":        a.Role,
-		},
-		McpServers: map[string]claude.McpServerConfig{
-			"collaboration": mcpServer,
 		},
 		AllowedTools:                    allowedTools,
 		AllowDangerouslySkipPermissions: true, // Allow tools to run without prompts in headless mode

@@ -88,9 +88,10 @@ func (m Model) renderAgentView() string {
 // renderCompletionView renders the completion view showing the deliverable
 func (m Model) renderCompletionView() string {
 	// Create completion view state
+	// Use pre-rendered content (glamour renders async to avoid blocking)
 	state := components.CompletionViewState{
 		Session:            m.session,
-		DeliverableContent: m.deliverableContent,
+		DeliverableContent: m.deliverableRenderedContent,
 		DeliverablePath:    m.deliverablePath,
 		ScrollOffset:       m.scrollOffset,
 	}

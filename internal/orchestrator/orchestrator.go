@@ -10,7 +10,6 @@ import (
 
 	"github.com/darinhaener/collab/internal/agent"
 	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/internal/mcp"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -18,7 +17,6 @@ import (
 type Orchestrator struct {
 	session      *types.Session
 	agentManager *agent.Manager
-	mcpServer    *mcp.Server
 	eventBus     *events.EventBus
 	apiKey       string
 }
@@ -36,29 +34,19 @@ func NewOrchestrator(
 	}
 }
 
-// Initialize sets up the orchestrator components (agent manager, MCP server)
+// Initialize sets up the orchestrator components (agent manager)
+// Note: MCP server removed - agents use file-based communication instead
 func (o *Orchestrator) Initialize(ctx context.Context) error {
 	// Create agent manager
 	o.agentManager = agent.NewManager(o.eventBus, o.session.ID, o.apiKey)
 
-	// Create MCP server first (required by ToolsBuilder)
-	o.mcpServer = mcp.NewServer(o.session.WorkspaceDir, o.session.ID, o.eventBus)
-	if err := o.mcpServer.Start(); err != nil {
-		return fmt.Errorf("start MCP server: %w", err)
-	}
-
-	// Create MCP tools builder with server instance
-	toolsBuilder := mcp.NewToolsBuilder(o.mcpServer)
-
-	// Spawn agent1 with its own set of tools
-	agent1Tools := toolsBuilder.CreateTools(o.session.Agent1.ID)
-	if _, err := o.agentManager.SpawnAgent(ctx, &o.session.Agent1, agent1Tools); err != nil {
+	// Spawn agent1 (no MCP tools - uses built-in tools only)
+	if _, err := o.agentManager.SpawnAgent(ctx, &o.session.Agent1); err != nil {
 		return fmt.Errorf("spawn agent1: %w", err)
 	}
 
-	// Spawn agent2 with its own set of tools
-	agent2Tools := toolsBuilder.CreateTools(o.session.Agent2.ID)
-	if _, err := o.agentManager.SpawnAgent(ctx, &o.session.Agent2, agent2Tools); err != nil {
+	// Spawn agent2 (no MCP tools - uses built-in tools only)
+	if _, err := o.agentManager.SpawnAgent(ctx, &o.session.Agent2); err != nil {
 		return fmt.Errorf("spawn agent2: %w", err)
 	}
 
@@ -167,7 +155,7 @@ func (o *Orchestrator) Resume(ctx context.Context) error {
 	o.eventBus.Publish(events.NewSessionResumed(o.session))
 
 	// Re-initialize if needed
-	if o.agentManager == nil || o.mcpServer == nil {
+	if o.agentManager == nil {
 		if err := o.Initialize(ctx); err != nil {
 			return fmt.Errorf("re-initialize: %w", err)
 		}
@@ -197,13 +185,6 @@ func (o *Orchestrator) Shutdown() error {
 	if o.agentManager != nil {
 		if err := o.agentManager.Shutdown(); err != nil {
 			errs = append(errs, fmt.Errorf("shutdown agent manager: %w", err))
-		}
-	}
-
-	// Stop MCP server
-	if o.mcpServer != nil {
-		if err := o.mcpServer.Shutdown(); err != nil {
-			errs = append(errs, fmt.Errorf("shutdown MCP server: %w", err))
 		}
 	}
 

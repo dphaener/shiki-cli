@@ -63,8 +63,8 @@ func (o *PlanOrchestrator) Initialize() error {
 	// Create agent instance
 	o.agent = agentpkg.NewAgent(agentCfg)
 
-	// Start agent (no MCP tools needed for now)
-	if err := o.agent.Start(o.ctx, []claude.McpTool{}, o.apiKey, agentCfg.ID); err != nil {
+	// Start agent (built-in tools only)
+	if err := o.agent.Start(o.ctx, o.apiKey, agentCfg.ID); err != nil {
 		return fmt.Errorf("failed to start plan agent: %w", err)
 	}
 

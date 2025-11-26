@@ -20,7 +20,7 @@ type DeliverableStatus struct {
 }
 
 // CheckCompletion determines if the session should be marked as completed
-// Returns true if both agents have submitted matching deliverables
+// Returns true if both agents have submitted deliverables
 func (o *Orchestrator) CheckCompletion() (bool, string, error) {
 	status, err := o.getDeliverableStatus()
 	if err != nil {
@@ -32,13 +32,28 @@ func (o *Orchestrator) CheckCompletion() (bool, string, error) {
 		return false, "", nil
 	}
 
-	// Compare content byte-for-byte
-	if !bytes.Equal(status.Agent1Content, status.Agent2Content) {
-		return false, "", nil
+	// Both submitted - create merged deliverable
+	deliverablePath := filepath.Join(o.session.WorkspaceDir, "deliverable.md")
+
+	var mergedContent []byte
+	if bytes.Equal(status.Agent1Content, status.Agent2Content) {
+		// Identical content - use as-is
+		mergedContent = status.Agent1Content
+	} else {
+		// Different content - combine both with clear separation
+		// Use agent2's version as primary (they saw agent1's work)
+		// but include agent1's for completeness
+		mergedContent = []byte(fmt.Sprintf("# Final Deliverable\n\n## Agent 2 (Approver) Version\n\n%s\n\n---\n\n## Agent 1 (Proposer) Version\n\n%s",
+			string(status.Agent2Content),
+			string(status.Agent1Content),
+		))
 	}
 
-	// Both submitted and content matches
-	return true, status.Agent1Path, nil
+	if err := os.WriteFile(deliverablePath, mergedContent, 0o600); err != nil {
+		return false, "", fmt.Errorf("write merged deliverable: %w", err)
+	}
+
+	return true, deliverablePath, nil
 }
 
 // getDeliverableStatus checks if agents have submitted deliverables
@@ -103,9 +118,9 @@ func (o *Orchestrator) GetCompletionSummary() string {
 
 	if status.Agent1Submitted && status.Agent2Submitted {
 		if bytes.Equal(status.Agent1Content, status.Agent2Content) {
-			return "Both agents submitted matching deliverables - COMPLETED"
+			return "Both agents submitted identical deliverables - COMPLETED"
 		}
-		return "Both agents submitted deliverables but content does not match - CONTINUE"
+		return "Both agents submitted deliverables (merged) - COMPLETED"
 	}
 
 	if status.Agent1Submitted {

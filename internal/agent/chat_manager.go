@@ -60,8 +60,9 @@ func NewChatManager(
 	}
 }
 
-// SpawnAgent creates and starts a new agent subprocess with MCP tools.
-func (m *ChatManager) SpawnAgent(ctx context.Context, cfg *types.Agent, mcpTools []claude.McpTool) (*Agent, error) {
+// SpawnAgent creates and starts a new agent subprocess.
+// Note: MCP tools removed - agents use built-in tools only and communicate via files
+func (m *ChatManager) SpawnAgent(ctx context.Context, cfg *types.Agent) (*Agent, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -71,7 +72,7 @@ func (m *ChatManager) SpawnAgent(ctx context.Context, cfg *types.Agent, mcpTools
 
 	agent := NewAgent(cfg)
 
-	if err := agent.Start(ctx, mcpTools, m.apiKey, cfg.ID); err != nil {
+	if err := agent.Start(ctx, m.apiKey, cfg.ID); err != nil {
 		return nil, fmt.Errorf("failed to start agent %s: %w", cfg.ID, err)
 	}
 
