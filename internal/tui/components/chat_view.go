@@ -381,14 +381,23 @@ func (c *ChatView) AddError(err error) {
 }
 
 // AddWelcomeMessage adds an initial welcome message from the assistant
-func (c *ChatView) AddWelcomeMessage(featureName string) {
-	welcome := fmt.Sprintf(`# Welcome to Feature Specification
+// hasDescription indicates whether the user provided a feature description as an argument
+func (c *ChatView) AddWelcomeMessage(featureName string, hasDescription bool) {
+	var welcome string
+
+	if hasDescription {
+		welcome = fmt.Sprintf(`# Welcome to Feature Specification
 
 I'll help you create a comprehensive specification for: **%s**
 
-I'll ask you a few clarifying questions to understand your requirements, then generate a structured specification document.
+I'll ask you a few clarifying questions to understand the full scope and requirements, then generate a structured specification document.`, featureName)
+	} else {
+		welcome = `# Welcome to Feature Specification
 
-Let's start with the first question: **What is the main goal of this feature and why does it matter?**`, featureName)
+I'll help you create a comprehensive specification for your feature.
+
+To get started, please tell me: **What feature would you like to specify today?** Give me a brief description of what you're building.`
+	}
 
 	c.AddMessage(types.ChatMessage{
 		Role:      "assistant",

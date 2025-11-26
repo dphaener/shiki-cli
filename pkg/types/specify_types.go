@@ -14,19 +14,23 @@ const (
 
 // SpecifySession represents a feature specification session
 type SpecifySession struct {
-	ID               string          `json:"id"`
-	FeatureDesc      string          `json:"feature_desc"`
-	FeatureNumber    int             `json:"feature_number"`
-	Slug             string          `json:"slug"`
-	FriendlyName     string          `json:"friendly_name"`
-	Phase            SpecifyPhase    `json:"phase"`
-	ChatHistory      []ChatMessage   `json:"chat_history"`
-	CurrentSpec      string          `json:"current_spec"`
-	ValidationIssues []string        `json:"validation_issues"`
-	CreatedAt        time.Time       `json:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at"`
-	CompletedAt      *time.Time      `json:"completed_at,omitempty"`
-	Status           SessionStatus   `json:"status"`
+	ID                     string        `json:"id"`
+	FeatureDesc            string        `json:"feature_desc"`
+	FeatureNumber          int           `json:"feature_number"`
+	Slug                   string        `json:"slug"`
+	FriendlyName           string        `json:"friendly_name"`
+	Phase                  SpecifyPhase  `json:"phase"`
+	ChatHistory            []ChatMessage `json:"chat_history"`
+	CurrentSpec            string        `json:"current_spec"`
+	ValidationIssues       []string      `json:"validation_issues"`
+	CreatedAt              time.Time     `json:"created_at"`
+	UpdatedAt              time.Time     `json:"updated_at"`
+	CompletedAt            *time.Time    `json:"completed_at,omitempty"`
+	Status                 SessionStatus `json:"status"`
+	SkipDiscoveryQuestions bool          `json:"skip_discovery_questions"`
+	SpecFile               string        `json:"spec_file"`
+	SpecDir                string        `json:"spec_dir"`
+	ChecklistDir           string        `json:"checklist_dir"`
 }
 
 // ChatMessage represents a single chat message in the specification workflow

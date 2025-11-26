@@ -50,11 +50,13 @@ func (d *debugLogger) close() {
 
 // SpecifyOrchestrator manages the specification workflow with a single agent
 type SpecifyOrchestrator struct {
-	session *types.SpecifySession
-	agent   *agentpkg.Agent
-	apiKey  string
-	ctx     context.Context
-	cancel  context.CancelFunc
+	session             *types.SpecifySession
+	agent               *agentpkg.Agent
+	apiKey              string
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	specifyInstructions string // Instructions sent as first message to prime the agent
+	instructionsSent    bool   // Whether we've sent the initial instructions
 }
 
 // NewSpecifyOrchestrator creates a new specify orchestrator
@@ -71,8 +73,29 @@ func NewSpecifyOrchestrator(session *types.SpecifySession, apiKey string) *Speci
 
 // Initialize sets up the agent
 func (o *SpecifyOrchestrator) Initialize() error {
-	// Create specify agent configuration
+	// Create debug logger for initialization
+	logger := newDebugLogger()
+	defer logger.close()
+
+	logger.log("========== INITIALIZING SPECIFY AGENT ==========")
+	logger.log("Session ID: %s", o.session.ID)
+	logger.log("Feature: %s (#%03d)", o.session.FriendlyName, o.session.FeatureNumber)
+	logger.log("Slug: %s", o.session.Slug)
+	logger.log("SpecFile: %s", o.session.SpecFile)
+	logger.log("SpecDir: %s", o.session.SpecDir)
+	logger.log("ChecklistDir: %s", o.session.ChecklistDir)
+	logger.log("SkipDiscovery: %v", o.session.SkipDiscoveryQuestions)
+
+	// Create specify agent configuration - this generates the instructions
 	agentCfg := agentpkg.NewSpecifyAgent(o.session)
+
+	// Store instructions to send as first message
+	o.specifyInstructions = agentCfg.SystemPrompt
+	o.instructionsSent = false
+
+	logger.log("========== SPECIFY INSTRUCTIONS ==========")
+	logger.log("%s", o.specifyInstructions)
+	logger.log("========== END SPECIFY INSTRUCTIONS ==========")
 
 	// Create agent instance
 	o.agent = agentpkg.NewAgent(agentCfg)
@@ -82,6 +105,7 @@ func (o *SpecifyOrchestrator) Initialize() error {
 		return fmt.Errorf("failed to start specify agent: %w", err)
 	}
 
+	logger.log("Agent started successfully")
 	return nil
 }
 
@@ -118,9 +142,19 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 		queryCtx, cancel := context.WithTimeout(o.ctx, 3*time.Minute)
 		defer cancel()
 
+		// Build the message to send
+		messageToSend := userMessage
+
+		// If this is the first message, prepend the specify instructions
+		if !o.instructionsSent && o.specifyInstructions != "" {
+			logger.log("Prepending specify instructions to first message")
+			messageToSend = o.specifyInstructions + "\n\n---\n\n## User Request\n\n" + userMessage
+			o.instructionsSent = true
+		}
+
 		// Send query to agent
-		logger.log("Sending query to agent...")
-		if err := client.Query(queryCtx, userMessage); err != nil {
+		logger.log("Sending query to agent (message length: %d chars)...", len(messageToSend))
+		if err := client.Query(queryCtx, messageToSend); err != nil {
 			logger.log("ERROR: failed to send query: %v", err)
 			errorChan <- fmt.Errorf("failed to send query: %w", err)
 			return

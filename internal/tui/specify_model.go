@@ -94,9 +94,15 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case AgentInitializedMsg:
 		m.orchestrator = msg.Orchestrator
-		// Auto-start discovery with the feature description
-		if m.session.FeatureDesc != "" && len(m.session.ChatHistory) == 0 {
-			return m, m.autoStartDiscovery()
+		// Handle initialization based on whether description was provided
+		if len(m.session.ChatHistory) == 0 {
+			if m.session.FeatureDesc != "" {
+				// WITH DESCRIPTION: Auto-start discovery with the feature description
+				return m, m.autoStartDiscovery()
+			} else {
+				// NO DESCRIPTION: Let AI initiate the conversation
+				return m, m.letAIInitiate()
+			}
 		}
 		return m, nil
 
@@ -264,7 +270,8 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ready = true
 			// Only add welcome message if we haven't auto-started discovery
 			if len(m.session.ChatHistory) == 0 {
-				m.chatView.AddWelcomeMessage(m.session.FriendlyName)
+				hasDescription := m.session.FeatureDesc != ""
+				m.chatView.AddWelcomeMessage(m.session.FriendlyName, hasDescription)
 			}
 			// Clear any escape sequences that leaked into textarea
 			m.chatView.ClearInput()
@@ -538,7 +545,7 @@ func containsSpecSections(content string) bool {
 
 // autoStartDiscovery automatically starts the discovery process with the feature description
 func (m *SpecifyModel) autoStartDiscovery() tea.Cmd {
-	// Create initial message with feature description
+	// Send the feature description as starting point for discovery
 	initialPrompt := fmt.Sprintf("I want to create a feature: %s", m.session.FeatureDesc)
 
 	// Add user message to chat
@@ -561,6 +568,23 @@ func (m *SpecifyModel) autoStartDiscovery() tea.Cmd {
 	// Reset response buffer and start streaming
 	m.responseBuffer = ""
 	return startAgentStreaming(m.orchestrator, initialPrompt)
+}
+
+// letAIInitiate triggers the AI to start the conversation when no description was provided
+func (m *SpecifyModel) letAIInitiate() tea.Cmd {
+	m.waitingForAI = true
+
+	// Send to AI agent with a prompt that triggers the AI's greeting
+	if m.orchestrator == nil {
+		return func() tea.Msg {
+			return AgentErrorMsg{Err: fmt.Errorf("agent not initialized")}
+		}
+	}
+
+	// Reset response buffer and start streaming
+	// Send an empty-ish message that signals the AI to initiate
+	m.responseBuffer = ""
+	return startAgentStreaming(m.orchestrator, "Hello, I'd like to specify a new feature.")
 }
 
 // sendMessage sends a user message and triggers AI response
