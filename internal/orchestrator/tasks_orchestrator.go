@@ -9,6 +9,7 @@ import (
 
 	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
 	agentpkg "github.com/darinhaener/collab/internal/agent"
+	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -21,17 +22,19 @@ type TasksOrchestrator struct {
 	cancel            context.CancelFunc
 	tasksInstructions string // Instructions sent as first message to prime the agent
 	instructionsSent  bool   // Whether we've sent the initial instructions
+	eventBus          *events.EventBus // Event bus for publishing assistant events
 }
 
 // NewTasksOrchestrator creates a new tasks orchestrator
-func NewTasksOrchestrator(session *types.WorkflowSession, apiKey string) *TasksOrchestrator {
+func NewTasksOrchestrator(session *types.WorkflowSession, apiKey string, eventBus *events.EventBus) *TasksOrchestrator {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &TasksOrchestrator{
-		session: session,
-		apiKey:  apiKey,
-		ctx:     ctx,
-		cancel:  cancel,
+		session:  session,
+		apiKey:   apiKey,
+		ctx:      ctx,
+		cancel:   cancel,
+		eventBus: eventBus,
 	}
 }
 
@@ -120,10 +123,46 @@ func (o *TasksOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdat
 			if err := client.Query(queryCtx, messageToSend); err != nil {
 				cancel()
 				logger.log("ERROR: failed to send query: %v", err)
+
+				// Publish assistant error event if eventBus is available
+				if o.eventBus != nil {
+					errorEvent := events.NewAssistantError(
+						o.session.ID,
+						"tasks",
+						o.session.ID,
+						"query_failed",
+						err.Error(),
+						"Failed to send query to tasks agent",
+						"abort",
+						map[string]interface{}{
+							"feature_number": o.session.FeatureNumber,
+							"slug":          o.session.Slug,
+						},
+					)
+					o.eventBus.Publish(errorEvent)
+				}
+
 				errorChan <- fmt.Errorf("failed to send query: %w", err)
 				return
 			}
 			logger.log("Query sent successfully")
+
+			// Publish assistant request event if eventBus is available
+			if o.eventBus != nil {
+				assistantEvent := events.NewAssistantRequest(
+					o.session.ID,
+					"tasks",
+					o.session.ID,
+					o.session.ID,
+					messageToSend,
+					map[string]interface{}{
+						"feature_number": o.session.FeatureNumber,
+						"slug":          o.session.Slug,
+						"message_length": len(messageToSend),
+					},
+				)
+				o.eventBus.Publish(assistantEvent)
+			}
 
 			// Receive messages
 			msgChan, errChan := client.ReceiveMessages(queryCtx)
@@ -182,9 +221,30 @@ func (o *TasksOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdat
 					if !ok {
 						logger.log("Channel closed (ok=false), sending completion")
 						if responseBuilder.Len() > 0 {
+							finalResponse := responseBuilder.String()
 							updateChan <- MessageUpdate{
 								Type:    "complete",
-								Content: responseBuilder.String(),
+								Content: finalResponse,
+							}
+
+							// Publish assistant response event if eventBus is available
+							if o.eventBus != nil {
+								responseEvent := events.NewAssistantResponse(
+									o.session.ID,
+									"tasks",
+									o.session.ID,
+									o.session.ID,
+									finalResponse,
+									0, // Token count not available here
+									0, // Timing not available here
+									"", // Model not available here
+									map[string]interface{}{
+										"feature_number": o.session.FeatureNumber,
+										"slug":          o.session.Slug,
+										"response_length": len(finalResponse),
+									},
+								)
+								o.eventBus.Publish(responseEvent)
 							}
 						}
 						completed = true

@@ -42,6 +42,11 @@ const (
 	EventToolInvoked            EventType = "tool.invoked"
 	EventAssistantMessage       EventType = "assistant.message"
 	EventCostThresholdExceeded  EventType = "cost.threshold_exceeded"
+	// New assistant logging events
+	EventAssistantRequest       EventType = "assistant.request"
+	EventAssistantResponse      EventType = "assistant.response"
+	EventAssistantError         EventType = "assistant.error"
+	EventAssistantMetadata      EventType = "assistant.metadata"
 )
 
 // Session represents a single collaboration run

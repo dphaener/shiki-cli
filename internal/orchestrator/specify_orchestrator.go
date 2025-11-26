@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
 	agentpkg "github.com/darinhaener/collab/internal/agent"
+	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -68,39 +68,6 @@ var errorCleaningPatterns = []errorCleaningPattern{
 	{multipleSpacesRegex, " "},
 }
 
-// debugLogger handles debug logging to a file
-type debugLogger struct {
-	file *os.File
-}
-
-// newDebugLogger creates a new debug logger
-func newDebugLogger() *debugLogger {
-	// Create log file in current directory
-	logPath := filepath.Join(".", "collab-debug.log")
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return &debugLogger{file: nil}
-	}
-	return &debugLogger{file: f}
-}
-
-// log writes a message to the debug log
-func (d *debugLogger) log(format string, args ...interface{}) {
-	if d.file == nil {
-		return
-	}
-	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
-	msg := fmt.Sprintf(format, args...)
-	fmt.Fprintf(d.file, "[%s] %s\n", timestamp, msg)
-	d.file.Sync()
-}
-
-// close closes the debug log file
-func (d *debugLogger) close() {
-	if d.file != nil {
-		d.file.Close()
-	}
-}
 
 // SpecifyOrchestrator manages the specification workflow with a single agent
 type SpecifyOrchestrator struct {
@@ -112,17 +79,19 @@ type SpecifyOrchestrator struct {
 	specifyInstructions string // Instructions sent as first message to prime the agent
 	instructionsSent    bool   // Whether we've sent the initial instructions
 	logger              *debugLogger // Singleton logger managed by orchestrator lifecycle
+	eventBus            *events.EventBus // Event bus for publishing assistant events
 }
 
 // NewSpecifyOrchestrator creates a new specify orchestrator
-func NewSpecifyOrchestrator(session *types.SpecifySession, apiKey string) *SpecifyOrchestrator {
+func NewSpecifyOrchestrator(session *types.SpecifySession, apiKey string, eventBus *events.EventBus) *SpecifyOrchestrator {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &SpecifyOrchestrator{
-		session: session,
-		apiKey:  apiKey,
-		ctx:     ctx,
-		cancel:  cancel,
+		session:  session,
+		apiKey:   apiKey,
+		ctx:      ctx,
+		cancel:   cancel,
+		eventBus: eventBus,
 	}
 }
 
@@ -262,10 +231,49 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 			if err := client.Query(queryCtx, messageToSend); err != nil {
 				cancel()
 				logger.log("ERROR: failed to send query: %v", err)
+
+				// Publish assistant error event if eventBus is available
+				if o.eventBus != nil {
+					errorEvent := events.NewAssistantError(
+						o.session.ID,
+						"specify",
+						o.session.ID, // Using session ID as agent ID for now
+						"query_failed",
+						err.Error(),
+						fmt.Sprintf("Failed to send query to agent (attempt %d)", attempt+1),
+						"retry", // Will retry if attempts remain
+						map[string]interface{}{
+							"feature_number": o.session.FeatureNumber,
+							"slug":          o.session.Slug,
+							"attempt":       attempt + 1,
+							"max_retries":   maxRetries,
+						},
+					)
+					o.eventBus.Publish(errorEvent)
+				}
+
 				errorChan <- fmt.Errorf("failed to send query: %w", err)
 				return
 			}
 			logger.log("Query sent successfully")
+
+			// Publish assistant request event if eventBus is available
+			if o.eventBus != nil {
+				assistantEvent := events.NewAssistantRequest(
+					o.session.ID,
+					"specify",
+					o.session.ID, // Using session ID as agent ID for now
+					o.session.ID, // Using session ID as conversation ID
+					messageToSend,
+					map[string]interface{}{
+						"feature_number": o.session.FeatureNumber,
+						"slug":          o.session.Slug,
+						"attempt":       attempt + 1,
+						"message_length": len(messageToSend),
+					},
+				)
+				o.eventBus.Publish(assistantEvent)
+			}
 
 			// Receive messages
 			msgChan, errChan := client.ReceiveMessages(queryCtx)
@@ -299,6 +307,25 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 							shouldRetry = true
 							break messageLoop
 						}
+						// Publish timeout error event if eventBus is available
+						if o.eventBus != nil {
+							timeoutEvent := events.NewAssistantError(
+								o.session.ID,
+								"specify",
+								o.session.ID,
+								"timeout",
+								queryCtx.Err().Error(),
+								fmt.Sprintf("Query timed out after %d retries", maxRetries),
+								"abort", // No more retries
+								map[string]interface{}{
+									"feature_number": o.session.FeatureNumber,
+									"slug":          o.session.Slug,
+									"max_retries":   maxRetries,
+								},
+							)
+							o.eventBus.Publish(timeoutEvent)
+						}
+
 						// No more retries, send error
 						errorChan <- fmt.Errorf("query timeout after %d retries: %w", maxRetries, queryCtx.Err())
 					}
@@ -331,9 +358,30 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 						logger.log("Channel closed (ok=false), sending completion")
 						// Channel truly closed - send completion signal
 						if responseBuilder.Len() > 0 {
+							finalResponse := responseBuilder.String()
 							updateChan <- MessageUpdate{
 								Type:    "complete",
-								Content: responseBuilder.String(),
+								Content: finalResponse,
+							}
+
+							// Publish assistant response event if eventBus is available
+							if o.eventBus != nil {
+								responseEvent := events.NewAssistantResponse(
+									o.session.ID,
+									"specify",
+									o.session.ID, // Using session ID as agent ID for now
+									o.session.ID, // Using session ID as conversation ID
+									finalResponse,
+									0, // Token count not available here
+									0, // Timing not available here
+									"", // Model not available here
+									map[string]interface{}{
+										"feature_number": o.session.FeatureNumber,
+										"slug":          o.session.Slug,
+										"response_length": len(finalResponse),
+									},
+								)
+								o.eventBus.Publish(responseEvent)
 							}
 						}
 						completed = true
@@ -389,6 +437,28 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 							logger.log("Usage - Input: %d, Output: %d",
 								assistantMsg.Message.Usage.InputTokens,
 								assistantMsg.Message.Usage.OutputTokens)
+
+							// Publish assistant metadata event for token usage if eventBus is available
+							if o.eventBus != nil && assistantMsg.Message.Usage.OutputTokens > 0 {
+								metadataEvent := events.NewAssistantMetadata(
+									o.session.ID,
+									"specify",
+									o.session.ID, // Using session ID as agent ID for now
+									int(assistantMsg.Message.Usage.InputTokens + assistantMsg.Message.Usage.OutputTokens),
+									0, // Cost not available
+									0, // Duration not available
+									"", // Model not specified
+									nil, // No performance data
+									map[string]interface{}{
+										"feature_number": o.session.FeatureNumber,
+										"slug":          o.session.Slug,
+										"input_tokens":  assistantMsg.Message.Usage.InputTokens,
+										"output_tokens": assistantMsg.Message.Usage.OutputTokens,
+										"message_id":    messageID,
+									},
+								)
+								o.eventBus.Publish(metadataEvent)
+							}
 
 							// Process each content block in the message
 							for i, block := range assistantMsg.Message.Content {
