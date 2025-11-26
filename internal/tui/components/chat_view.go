@@ -12,6 +12,9 @@ import (
 	"github.com/darinhaener/collab/pkg/types"
 )
 
+// maxInputHeight is the fixed height of the input container (textarea grows upward within it)
+const maxInputHeight = 5
+
 // ChatView manages the chat interface for specification collaboration
 type ChatView struct {
 	viewport         viewport.Model
@@ -80,12 +83,19 @@ func (c ChatView) View() string {
 		c.contentDirty = false
 	}
 
+	// Wrap textarea in a bottom-aligned container so input grows upward
+	inputContainer := lipgloss.NewStyle().
+		Width(c.width - 4).
+		Height(maxInputHeight).
+		AlignVertical(lipgloss.Bottom).
+		Render(c.textarea.View())
+
 	// Build the complete view
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		c.viewport.View(),
 		chatInputSeparator.Render(strings.Repeat("─", c.width-4)),
-		c.textarea.View(),
+		inputContainer,
 	)
 }
 
@@ -94,9 +104,15 @@ func (c *ChatView) SetSize(width, height int) {
 	c.width = width
 	c.height = height
 	c.viewport.Width = width - 4
-	c.viewport.Height = height - 4
 	c.textarea.SetWidth(width - 4)
-	c.textarea.SetHeight(1)
+
+	// Fixed input container height, textarea can grow within it
+	// Viewport height = total - separator (1) - input container (maxInputHeight)
+	c.viewport.Height = height - 1 - maxInputHeight
+	if c.viewport.Height < 3 {
+		c.viewport.Height = 3
+	}
+	c.textarea.SetHeight(maxInputHeight)
 
 	// Focus textarea on first resize
 	if !c.ready {
