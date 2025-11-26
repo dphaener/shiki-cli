@@ -422,7 +422,7 @@ func (m *SpecifyModel) renderFooter() string {
 		shortcuts = []string{
 			"Enter: Send",
 			"Tab: Switch to Preview",
-			"PgUp/PgDn: Scroll",
+			"↑/↓/PgUp/PgDn: Scroll",
 			"Ctrl+C/Esc: Quit",
 		}
 	} else {

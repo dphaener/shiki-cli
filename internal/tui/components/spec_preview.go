@@ -13,6 +13,7 @@ import (
 type SpecPreview struct {
 	viewport         viewport.Model
 	content          string
+	renderedContent  string // Cached rendered markdown content
 	validationIssues []string
 	phase            types.SpecifyPhase
 	width            int
@@ -43,6 +44,26 @@ func (s SpecPreview) Init() tea.Cmd {
 // Update implements tea.Model
 func (s SpecPreview) Update(msg tea.Msg) (SpecPreview, tea.Cmd) {
 	var cmd tea.Cmd
+
+	// Handle key events for scrolling explicitly
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		switch keyMsg.String() {
+		case "up", "k":
+			s.viewport.LineUp(1)
+			return s, nil
+		case "down", "j":
+			s.viewport.LineDown(1)
+			return s, nil
+		case "pgup":
+			s.viewport.HalfViewUp()
+			return s, nil
+		case "pgdown":
+			s.viewport.HalfViewDown()
+			return s, nil
+		}
+	}
+
+	// Delegate other messages to viewport
 	s.viewport, cmd = s.viewport.Update(msg)
 	return s, cmd
 }
@@ -57,13 +78,11 @@ func (s SpecPreview) View() string {
 		return specHiddenStyle.Render("Preview hidden (Tab to show)")
 	}
 
-	// Render the spec content
-	rendered := s.renderContent()
-	s.viewport.SetContent(rendered)
-
 	// Add header with phase indicator
 	header := s.renderHeader()
 
+	// Use cached viewport content (set by SetContent/SetSize)
+	// Don't call SetContent here - it resets scroll position
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
@@ -73,15 +92,36 @@ func (s SpecPreview) View() string {
 
 // SetSize updates the preview dimensions
 func (s *SpecPreview) SetSize(width, height int) {
+	widthChanged := s.width != width
 	s.width = width
 	s.height = height
 	s.viewport.Width = width - 4
 	s.viewport.Height = height - 4
+
+	// Re-render if width changed (affects markdown rendering) and we have content
+	if widthChanged && s.content != "" {
+		s.updateRenderedContent()
+	}
 }
 
 // SetContent updates the spec content
 func (s *SpecPreview) SetContent(content string) {
-	s.content = content
+	if s.content != content {
+		s.content = content
+		s.updateRenderedContent()
+	}
+}
+
+// updateRenderedContent re-renders the content and updates the viewport
+func (s *SpecPreview) updateRenderedContent() {
+	rendered := s.renderContent()
+	s.renderedContent = rendered
+
+	// Wrap content to viewport width to ensure proper line breaks
+	// The viewport counts lines by \n, so content that wraps visually
+	// without \n characters will break scrolling
+	wrappedContent := lipgloss.NewStyle().Width(s.viewport.Width).Render(rendered)
+	s.viewport.SetContent(wrappedContent)
 }
 
 // SetPhase updates the current workflow phase
@@ -129,9 +169,16 @@ func (s *SpecPreview) renderContent() string {
 		return s.renderEmptyState()
 	}
 
+	// Calculate render width with minimum validation
+	// Width might be 0 before first WindowSizeMsg
+	renderWidth := s.width - 8
+	if renderWidth < 40 {
+		renderWidth = 40 // Minimum width for readable markdown
+	}
+
 	// Use shared markdown renderer with proper width handling
 	renderer := GetMarkdownRenderer()
-	rendered, err := renderer.Render(s.content, s.width-8)
+	rendered, err := renderer.Render(s.content, renderWidth)
 	if err != nil {
 		// Fallback to plain content if rendering fails
 		rendered = s.content
