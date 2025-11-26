@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,6 +14,59 @@ import (
 	agentpkg "github.com/darinhaener/collab/internal/agent"
 	"github.com/darinhaener/collab/pkg/types"
 )
+
+// Pre-compiled regex patterns for error message cleaning (compiled once at package init)
+var (
+	// Stack traces (lines starting with 'at ' or containing file paths)
+	stackTraceLineRegex    = regexp.MustCompile(`(?m)^\s*at\s+.*$`)
+	stackTraceEntryRegex   = regexp.MustCompile(`(?m)^\s*\w+\.\w+\([^)]*\):\d+.*$`)
+
+	// File paths - more specific patterns
+	absoluteFilePathRegex  = regexp.MustCompile(`/[\w\-./]+\.\w+`)
+	stackTraceAtRegex      = regexp.MustCompile(`\s+at\s+[\w./\\]+:\d+`)
+
+	// Error codes - more specific to avoid false positives
+	errorCodeLabelRegex    = regexp.MustCompile(`(?i)\berror code[:\s]+[A-Za-z0-9_]+`)
+	errorCodeConstRegex    = regexp.MustCompile(`\b[A-Z]{3,}_[A-Z0-9_]+\b`)
+	hexValueRegex          = regexp.MustCompile(`\b0x[0-9A-Fa-f]+\b`)
+
+	// Debug information and verbose details
+	stackTraceKeywordRegex = regexp.MustCompile(`\bstack trace:.*`)
+	traceKeywordRegex      = regexp.MustCompile(`\btrace:.*`)
+	debugKeywordRegex      = regexp.MustCompile(`\bdebug:\s*[^\n]*`)
+
+	// Technical JSON/XML fragments
+	jsonFragmentRegex      = regexp.MustCompile(`\{[^{}]*"[^"]*"[^{}]*\}`)
+	xmlTagRegex            = regexp.MustCompile(`<[^>]*>`)
+
+	// Clean up multiple whitespace but preserve structure
+	multipleBlankLinesRegex = regexp.MustCompile(`\n\s*\n\s*\n+`)
+	multipleSpacesRegex     = regexp.MustCompile(`\s+`)
+)
+
+// errorCleaningPattern pairs a pre-compiled regex with its replacement string
+type errorCleaningPattern struct {
+	regex       *regexp.Regexp
+	replacement string
+}
+
+// errorCleaningPatterns is the ordered list of patterns to apply for cleaning error messages
+var errorCleaningPatterns = []errorCleaningPattern{
+	{stackTraceLineRegex, ""},
+	{stackTraceEntryRegex, ""},
+	{absoluteFilePathRegex, ""},
+	{stackTraceAtRegex, ""},
+	{errorCodeLabelRegex, ""},
+	{errorCodeConstRegex, ""},
+	{hexValueRegex, ""},
+	{stackTraceKeywordRegex, ""},
+	{traceKeywordRegex, ""},
+	{debugKeywordRegex, ""},
+	{jsonFragmentRegex, ""},
+	{xmlTagRegex, ""},
+	{multipleBlankLinesRegex, "\n"},
+	{multipleSpacesRegex, " "},
+}
 
 // debugLogger handles debug logging to a file
 type debugLogger struct {
@@ -57,6 +111,7 @@ type SpecifyOrchestrator struct {
 	cancel              context.CancelFunc
 	specifyInstructions string // Instructions sent as first message to prime the agent
 	instructionsSent    bool   // Whether we've sent the initial instructions
+	logger              *debugLogger // Singleton logger managed by orchestrator lifecycle
 }
 
 // NewSpecifyOrchestrator creates a new specify orchestrator
@@ -73,18 +128,17 @@ func NewSpecifyOrchestrator(session *types.SpecifySession, apiKey string) *Speci
 
 // Initialize sets up the agent
 func (o *SpecifyOrchestrator) Initialize() error {
-	// Create debug logger for initialization
-	logger := newDebugLogger()
-	defer logger.close()
+	// Create singleton debug logger for orchestrator lifecycle
+	o.logger = newDebugLogger()
 
-	logger.log("========== INITIALIZING SPECIFY AGENT ==========")
-	logger.log("Session ID: %s", o.session.ID)
-	logger.log("Feature: %s (#%03d)", o.session.FriendlyName, o.session.FeatureNumber)
-	logger.log("Slug: %s", o.session.Slug)
-	logger.log("SpecFile: %s", o.session.SpecFile)
-	logger.log("SpecDir: %s", o.session.SpecDir)
-	logger.log("ChecklistDir: %s", o.session.ChecklistDir)
-	logger.log("SkipDiscovery: %v", o.session.SkipDiscoveryQuestions)
+	o.logger.log("========== INITIALIZING SPECIFY AGENT ==========")
+	o.logger.log("Session ID: %s", o.session.ID)
+	o.logger.log("Feature: %s (#%03d)", o.session.FriendlyName, o.session.FeatureNumber)
+	o.logger.log("Slug: %s", o.session.Slug)
+	o.logger.log("SpecFile: %s", o.session.SpecFile)
+	o.logger.log("SpecDir: %s", o.session.SpecDir)
+	o.logger.log("ChecklistDir: %s", o.session.ChecklistDir)
+	o.logger.log("SkipDiscovery: %v", o.session.SkipDiscoveryQuestions)
 
 	// Create specify agent configuration - this generates the instructions
 	agentCfg := agentpkg.NewSpecifyAgent(o.session)
@@ -93,9 +147,9 @@ func (o *SpecifyOrchestrator) Initialize() error {
 	o.specifyInstructions = agentCfg.SystemPrompt
 	o.instructionsSent = false
 
-	logger.log("========== SPECIFY INSTRUCTIONS ==========")
-	logger.log("%s", o.specifyInstructions)
-	logger.log("========== END SPECIFY INSTRUCTIONS ==========")
+	o.logger.log("========== SPECIFY INSTRUCTIONS ==========")
+	o.logger.log("%s", o.specifyInstructions)
+	o.logger.log("========== END SPECIFY INSTRUCTIONS ==========")
 
 	// Create agent instance
 	o.agent = agentpkg.NewAgent(agentCfg)
@@ -105,7 +159,7 @@ func (o *SpecifyOrchestrator) Initialize() error {
 		return fmt.Errorf("failed to start specify agent: %w", err)
 	}
 
-	logger.log("Agent started successfully")
+	o.logger.log("Agent started successfully")
 	return nil
 }
 
@@ -127,9 +181,8 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 	errorChan := make(chan error, 1)
 
 	go func() {
-		// Create debug logger
-		logger := newDebugLogger()
-		defer logger.close()
+		// Use orchestrator's singleton logger (no defer close - managed by orchestrator lifecycle)
+		logger := o.logger
 
 		logger.log("========== NEW MESSAGE ==========")
 		logger.log("User message: %s", userMessage)
@@ -391,17 +444,21 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 										toolResult.ToolUseID, toolResult.IsError, truncateForLog(contentStr, 100))
 
 									if toolResult.IsError {
-										// Build error message with context from the tool use
-										errorMsg := contentStr
+										// Clean the error message to make it user-friendly
+										cleanedError := cleanErrorMessage(contentStr)
+
+										// Add context if available, using friendly names
 										if toolInfo, ok := pendingTools[toolResult.ToolUseID]; ok {
-											errorMsg = fmt.Sprintf("%s\nTool: %s\nArgs: %s",
-												contentStr, toolInfo.Name, toolInfo.Args)
+											context := formatErrorContext(toolInfo.Name, toolInfo.Args)
+											if context != "" {
+												cleanedError = context + ": " + cleanedError
+											}
 										}
 
 										// Surface tool error to the user
 										updateChan <- MessageUpdate{
 											Type:    "tool_error",
-											Content: errorMsg,
+											Content: cleanedError,
 										}
 									}
 
@@ -441,9 +498,83 @@ func truncateForLog(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
+// cleanErrorMessage sanitizes error messages by removing technical details
+// and providing user-friendly error descriptions
+func cleanErrorMessage(errorMsg string) string {
+	if errorMsg == "" {
+		return "An unknown error occurred"
+	}
+
+	cleaned := errorMsg
+
+	// Apply all pre-compiled cleaning patterns
+	for _, p := range errorCleaningPatterns {
+		cleaned = p.regex.ReplaceAllString(cleaned, p.replacement)
+	}
+
+	// Clean up the result
+	cleaned = strings.TrimSpace(cleaned)
+
+	// Remove leading/trailing punctuation artifacts
+	cleaned = strings.Trim(cleaned, ":.,; ")
+
+	// Handle empty or too short result after cleaning
+	if cleaned == "" || len(cleaned) < 3 {
+		return "An error occurred. Please check your input and try again."
+	}
+
+	// Ensure the message starts with a capital letter and ends properly
+	cleaned = capitalizeFirst(cleaned)
+	if !strings.HasSuffix(cleaned, ".") && !strings.HasSuffix(cleaned, "!") && !strings.HasSuffix(cleaned, "?") {
+		cleaned += "."
+	}
+
+	return cleaned
+}
+
+// formatErrorContext creates a user-friendly context description for tool errors
+func formatErrorContext(toolName, toolArgs string) string {
+	if toolName == "" {
+		return ""
+	}
+
+	// Map technical tool names to user-friendly descriptions
+	friendlyNames := map[string]string{
+		"bash":         "running command",
+		"edit":         "editing file",
+		"write":        "writing file",
+		"read":         "reading file",
+		"grep":         "searching content",
+		"glob":         "finding files",
+		"web_fetch":    "fetching web content",
+		"web_search":   "searching web",
+	}
+
+	friendlyName := friendlyNames[strings.ToLower(toolName)]
+	if friendlyName == "" {
+		friendlyName = strings.ToLower(toolName)
+	}
+
+	return fmt.Sprintf("Error while %s", friendlyName)
+}
+
+// capitalizeFirst capitalizes the first letter of a string
+func capitalizeFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
 // Stop gracefully shuts down the orchestrator
 func (o *SpecifyOrchestrator) Stop() error {
 	o.cancel()
+
+	// Close the singleton logger
+	if o.logger != nil {
+		o.logger.close()
+		o.logger = nil
+	}
 
 	if o.agent != nil {
 		return o.agent.Stop()

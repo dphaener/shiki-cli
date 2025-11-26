@@ -16,6 +16,12 @@ import (
 // maxInputHeight is the fixed height of the input container (textarea grows upward within it)
 const maxInputHeight = 3
 
+// errorMessageHorizontalPadding accounts for left/right padding and margins in error messages
+const errorMessageHorizontalPadding = 8
+
+// errorMessageStylePadding accounts for additional padding from errorMessageStyle (Padding(1, 2))
+const errorMessageStylePadding = 4
+
 // ChatView manages the chat interface for specification collaboration
 type ChatView struct {
 	viewport         viewport.Model
@@ -25,8 +31,10 @@ type ChatView struct {
 	height           int
 	ready            bool
 	lastMessageCount int
-	contentDirty     bool
-	isStreaming      bool // Track if we're currently receiving a streaming message
+	// contentDirty tracks whether messages have changed since last render.
+	// Safe to use without synchronization due to Bubble Tea's single-threaded model.
+	contentDirty bool
+	isStreaming  bool // Track if we're currently receiving a streaming message
 }
 
 // NewChatView creates a new chat view
@@ -331,7 +339,14 @@ func (c *ChatView) renderMessage(msg types.ChatMessage) string {
 			Render("⚠")
 
 		header := errorHeaderStyle.Render(fmt.Sprintf("%s Error (%s)", errorIcon, timestamp))
-		content := errorMessageStyle.Render(msg.Content)
+
+		// Apply text wrapping to error content using existing infrastructure
+		contentWidth := c.width - errorMessageHorizontalPadding
+
+		// Use fallback word wrap for plain text error messages to maintain styling
+		wrappedContent := wordWrap(msg.Content, contentWidth-errorMessageStylePadding)
+		content := errorMessageStyle.Render(wrappedContent)
+
 		return lipgloss.JoinVertical(lipgloss.Left, header, content)
 
 	default:
