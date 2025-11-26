@@ -7,59 +7,60 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/darinhaener/collab/internal/conversation"
+	"github.com/darinhaener/collab/internal/tui/theme"
 )
 
-// Part rendering styles
+// Part rendering styles using Sekkei Design System theme
 var (
 	textPartStyle = lipgloss.NewStyle().
 			Padding(0, 1).
-			Foreground(lipgloss.Color("252"))
+			Foreground(theme.Slate200)
 
 	toolCallStyle = lipgloss.NewStyle().
 			Padding(0, 1).
-			Foreground(lipgloss.Color("39"))
+			Foreground(theme.Info)
 
 	toolCallNameStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("39"))
+				Foreground(theme.Info)
 
 	toolCallArgsStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("244"))
+				Foreground(theme.TextMuted)
 
 	toolCallArgKeyStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("147"))
+				Foreground(theme.Emerald400)
 
 	toolCallArgValueStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("222"))
+				Foreground(theme.Amber500)
 
 	toolResultStyle = lipgloss.NewStyle().
 			Padding(0, 1).
-			Foreground(lipgloss.Color("244"))
+			Foreground(theme.TextMuted)
 
 	toolResultErrorStyle = lipgloss.NewStyle().
 				Padding(0, 1).
-				Foreground(lipgloss.Color("196"))
+				Foreground(theme.Error)
 
 	reasoningStyle = lipgloss.NewStyle().
 			Padding(0, 1).
-			Foreground(lipgloss.Color("241")).
+			Foreground(theme.TextDim).
 			Italic(true)
 
 	toolStatusPendingStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("244")).
+				Foreground(theme.TextMuted).
 				Render("◦")
 
 	toolStatusRunningStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("39")).
+				Foreground(theme.Info).
 				Bold(true).
 				Render("●")
 
 	toolStatusCompletedStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("42")).
+					Foreground(theme.Success).
 					Render("✓")
 
 	toolStatusFailedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("196")).
+				Foreground(theme.Error).
 				Bold(true).
 				Render("✗")
 )
@@ -107,7 +108,7 @@ func renderToolCallPart(part conversation.ToolCallPart, width int) string {
 
 	// Tool icon and name
 	toolIcon := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
+		Foreground(theme.Info).
 		Bold(true).
 		Render("▶")
 

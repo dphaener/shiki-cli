@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/glamour/ansi"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -50,7 +51,7 @@ func (r *MarkdownRenderer) Render(text string, width int) (string, error) {
 	if !exists {
 		var err error
 		renderer, err = glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
+			glamour.WithStyles(sekkeiStyle()),
 			glamour.WithWordWrap(normalizedWidth),
 		)
 		if err != nil {
@@ -123,3 +124,112 @@ func wordWrap(text string, width int) string {
 
 	return strings.Join(lines, "\n")
 }
+
+// sekkeiStyle returns a custom glamour style using the Sekkei Design System colors
+func sekkeiStyle() ansi.StyleConfig {
+	// Emerald color for headings (matches theme.Primary #10b981)
+	emerald := "#10b981"
+	emeraldDark := "#059669"
+	sky := "#0ea5e9"
+	slate400 := "#94a3b8"
+	slate200 := "#e2e8f0"
+
+	return ansi.StyleConfig{
+		Document: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				BlockPrefix: "",
+				BlockSuffix: "",
+			},
+			Margin: uintPtr(0),
+		},
+		Heading: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color: stringPtr(emerald),
+				Bold:  boolPtr(true),
+			},
+		},
+		H1: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color:  stringPtr(emerald),
+				Bold:   boolPtr(true),
+				Prefix: "# ",
+			},
+		},
+		H2: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color:  stringPtr(emerald),
+				Bold:   boolPtr(true),
+				Prefix: "## ",
+			},
+		},
+		H3: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color:  stringPtr(emeraldDark),
+				Bold:   boolPtr(true),
+				Prefix: "### ",
+			},
+		},
+		H4: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color:  stringPtr(emeraldDark),
+				Bold:   boolPtr(true),
+				Prefix: "#### ",
+			},
+		},
+		H5: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color:  stringPtr(emeraldDark),
+				Bold:   boolPtr(true),
+				Prefix: "##### ",
+			},
+		},
+		H6: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color:  stringPtr(emeraldDark),
+				Bold:   boolPtr(true),
+				Prefix: "###### ",
+			},
+		},
+		Strong: ansi.StylePrimitive{
+			Bold: boolPtr(true),
+		},
+		Emph: ansi.StylePrimitive{
+			Italic: boolPtr(true),
+		},
+		Link: ansi.StylePrimitive{
+			Color:     stringPtr(sky),
+			Underline: boolPtr(true),
+		},
+		LinkText: ansi.StylePrimitive{
+			Color: stringPtr(sky),
+		},
+		Code: ansi.StyleBlock{
+			StylePrimitive: ansi.StylePrimitive{
+				Color: stringPtr(slate200),
+			},
+		},
+		CodeBlock: ansi.StyleCodeBlock{
+			StyleBlock: ansi.StyleBlock{
+				Margin: uintPtr(1),
+			},
+		},
+		List: ansi.StyleList{
+			StyleBlock: ansi.StyleBlock{},
+			LevelIndent: 2,
+		},
+		Item: ansi.StylePrimitive{
+			BlockPrefix: "• ",
+		},
+		Paragraph: ansi.StyleBlock{},
+		Text: ansi.StylePrimitive{},
+		HorizontalRule: ansi.StylePrimitive{
+			Color:  stringPtr(slate400),
+			Format: "───────────────────",
+		},
+	}
+}
+
+// Helper functions for pointer values
+func stringPtr(s string) *string { return &s }
+func boolPtr(b bool) *bool       { return &b }
+func uintPtr(u uint) *uint       { return &u }

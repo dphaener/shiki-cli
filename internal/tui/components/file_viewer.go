@@ -5,17 +5,18 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/tui/theme"
 )
 
-// Styles for file viewer (reuse from turn_list where applicable)
+// Styles for file viewer using Sekkei Design System theme
 var (
 	fileNameStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("62")).
+			Foreground(theme.Primary).
 			Padding(0, 1)
 
 	fileLineNumberStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("244")).
+				Foreground(theme.TextMuted).
 				Width(4).
 				Align(lipgloss.Right)
 )

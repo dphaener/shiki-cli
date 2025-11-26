@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/tui/theme"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -258,44 +259,44 @@ func (s *SpecPreview) getPhaseText() string {
 	}
 }
 
-// Styles for spec preview
+// Styles for spec preview using Sekkei Design System theme
 var (
 	specHeaderStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("62")).
+			Foreground(theme.Primary).
 			Bold(true).
 			Padding(0, 1)
 
 	specSeparatorStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("240"))
+				Foreground(theme.Border)
 
 	specEmptyStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(theme.TextMuted).
 			Italic(true).
 			Padding(2, 2)
 
 	specHiddenStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(theme.TextMuted).
 			Italic(true).
 			Align(lipgloss.Center).
 			Padding(2, 2)
 
 	phaseDiscoveryIcon = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("39"))
+				Foreground(theme.Info)
 
 	phaseGenerationIcon = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("226"))
+				Foreground(theme.Warning)
 
 	phaseValidationIcon = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("42"))
+				Foreground(theme.Success)
 
 	phaseCompleteIcon = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("42"))
+				Foreground(theme.Success)
 
 	validationHeaderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("214")).
+				Foreground(theme.Warning).
 				Bold(true).
 				Padding(1, 0, 0, 0)
 
 	validationIssueStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("214"))
+				Foreground(theme.Warning)
 )

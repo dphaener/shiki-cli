@@ -4,19 +4,20 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/tui/theme"
 )
 
-// Styles for status bar
+// Styles for status bar using Sekkei Design System theme
 var (
 	statusBarStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("62")).
-			Foreground(lipgloss.Color("15")).
+			Background(theme.PrimaryDark).
+			Foreground(theme.Text).
 			Padding(0, 1)
 
 	statusBarKeyStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("15")).
-				Background(lipgloss.Color("240")).
+				Foreground(theme.Text).
+				Background(theme.Border).
 				Padding(0, 1)
 )
 

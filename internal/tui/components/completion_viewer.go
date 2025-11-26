@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/tui/theme"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -17,34 +18,34 @@ type CompletionViewState struct {
 	ScrollOffset       int
 }
 
-// Styles for completion view
+// Styles for completion view using Sekkei Design System theme
 var (
 	completionTitleStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("42")).
+				Foreground(theme.Success).
 				Padding(0, 1)
 
 	completionSummaryStyle = lipgloss.NewStyle().
 				Padding(0, 1).
-				Foreground(lipgloss.Color("252"))
+				Foreground(theme.Slate200)
 
 	completionLabelStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("244")).
+				Foreground(theme.TextMuted).
 				Bold(true)
 
 	completionValueStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("252"))
+				Foreground(theme.Slate200)
 
 	completionPathStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("39")).
+				Foreground(theme.Info).
 				Italic(true)
 
 	completionKeybindingStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("244")).
+					Foreground(theme.TextMuted).
 					Padding(0, 1)
 
 	completionDividerStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("240")).
+				Foreground(theme.Border).
 				Render("────────────────────────────────────────")
 )
 
@@ -82,7 +83,7 @@ func RenderCompletionView(state CompletionViewState, width, height int) string {
 // buildCompletionTitle creates the title section
 func buildCompletionTitle() string {
 	icon := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("42")).
+		Foreground(theme.Success).
 		Bold(true).
 		Render("✓")
 
@@ -162,7 +163,7 @@ func buildSessionSummary(session *types.Session, deliverablePath string, width i
 func buildDeliverableContent(content string, width, height, scrollOffset int) string {
 	if content == "" {
 		emptyMsg := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(theme.TextMuted).
 			Italic(true).
 			Render("No deliverable content available")
 		return fmt.Sprintf("\n  %s\n", emptyMsg)
@@ -216,7 +217,7 @@ func buildDeliverableContent(content string, width, height, scrollOffset int) st
 	var output []string
 	if startIdx > 0 {
 		indicator := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(theme.TextMuted).
 			Italic(true).
 			Render(fmt.Sprintf("  ↑ %d earlier lines...", startIdx))
 		output = append(output, indicator)
@@ -230,7 +231,7 @@ func buildDeliverableContent(content string, width, height, scrollOffset int) st
 
 	if endIdx < totalLines {
 		indicator := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(theme.TextMuted).
 			Italic(true).
 			Render(fmt.Sprintf("  ↓ %d more lines...", totalLines-endIdx))
 		// Adjust visible lines to make room for indicator

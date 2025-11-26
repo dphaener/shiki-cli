@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/darinhaener/collab/internal/conversation"
+	"github.com/darinhaener/collab/internal/tui/theme"
 )
 
 // MessageListState holds all information needed to render a message list pane.
@@ -22,47 +23,47 @@ type MessageListState struct {
 	IsStreaming     bool // True when actively receiving content
 }
 
-// Message list styles
+// Message list styles using Sekkei Design System theme
 var (
 	messageListHeaderStyle = lipgloss.NewStyle().
 				Bold(true).
 				Padding(0, 1).
-				Foreground(lipgloss.Color("62"))
+				Foreground(theme.Primary)
 
 	messageListMetadataStyle = lipgloss.NewStyle().
 					Padding(0, 1).
-					Foreground(lipgloss.Color("244"))
+					Foreground(theme.TextMuted)
 
 	statusStreamingIcon = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("39")).
+				Foreground(theme.Info).
 				Bold(true).
 				Render("⋯")
 
 	statusActiveIcon = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("39")).
+				Foreground(theme.Info).
 				Bold(true).
 				Render("●")
 
 	statusIdleIconMsg = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("42")).
+				Foreground(theme.Success).
 				Render("✓")
 
 	statusErrorIconMsg = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("196")).
+				Foreground(theme.Error).
 				Bold(true).
 				Render("✗")
 
 	statusPausedIcon = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("214")).
+				Foreground(theme.Warning).
 				Render("⏸")
 
 	messageSeparatorStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("238"))
+				Foreground(theme.Slate700)
 
 	streamingBufferStyle = lipgloss.NewStyle().
 				Padding(0, 1).
-				Foreground(lipgloss.Color("252")).
-				Background(lipgloss.Color("235"))
+				Foreground(theme.Slate200).
+				Background(theme.BgMedium)
 )
 
 // RenderMessageList renders a participant's message list pane.

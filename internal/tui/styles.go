@@ -1,17 +1,20 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/tui/theme"
+)
 
-// Color palette for TUI
-const (
-	colorPrimary   = lipgloss.Color("62")  // Purple
-	colorSecondary = lipgloss.Color("240") // Gray
-	colorSuccess   = lipgloss.Color("42")  // Green
-	colorError     = lipgloss.Color("196") // Red
-	colorWarning   = lipgloss.Color("220") // Yellow
-	colorInfo      = lipgloss.Color("39")  // Blue
-	colorText      = lipgloss.Color("15")  // White
-	colorMuted     = lipgloss.Color("244") // Light gray
+// Color aliases using Sekkei Design System theme
+var (
+	colorPrimary   = theme.Primary
+	colorSecondary = theme.Border
+	colorSuccess   = theme.Success
+	colorError     = theme.Error
+	colorWarning   = theme.Warning
+	colorInfo      = theme.Info
+	colorText      = theme.Text
+	colorMuted     = theme.TextMuted
 )
 
 // Header styles

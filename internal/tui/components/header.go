@@ -5,32 +5,32 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/tui/theme"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
-// Styles - these will be provided by the tui package
-// For now we'll use simple inline styles
+// Styles using Sekkei Design System theme
 var (
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("15")).
-			Background(lipgloss.Color("62")).
+			Foreground(theme.Text).
+			Background(theme.PrimaryDark).
 			Padding(0, 1)
 
 	statusRunningStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("39")).
+				Foreground(theme.Info).
 				Bold(true)
 
 	statusPausedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("220")).
+				Foreground(theme.Warning).
 				Bold(true)
 
 	statusCompletedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("42")).
+				Foreground(theme.Success).
 				Bold(true)
 
 	statusErrorStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("196")).
+				Foreground(theme.Error).
 				Bold(true)
 )
 

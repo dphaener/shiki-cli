@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/tui/theme"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -46,36 +47,36 @@ type AgentOutputState struct {
 	AutoScroll   bool // When true, automatically scroll to show latest content
 }
 
-// Styles for agent output
+// Styles for agent output using Sekkei Design System theme
 var (
 	agentHeaderStyle = lipgloss.NewStyle().
 				Bold(true).
 				Padding(0, 1).
-				Foreground(lipgloss.Color("62"))
+				Foreground(theme.Primary)
 
 	agentMetadataStyle = lipgloss.NewStyle().
 				Padding(0, 1).
-				Foreground(lipgloss.Color("244"))
+				Foreground(theme.TextMuted)
 
 	toolUseStyle = lipgloss.NewStyle().
 			Padding(0, 1).
-			Foreground(lipgloss.Color("39"))
+			Foreground(theme.Info)
 
 	assistantMessageStyle = lipgloss.NewStyle().
 				Padding(0, 1).
-				Foreground(lipgloss.Color("252"))
+				Foreground(theme.Slate200)
 
 	statusRunningIcon = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("39")).
+				Foreground(theme.Info).
 				Bold(true).
 				Render("●")
 
 	statusIdleIcon = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("42")).
+			Foreground(theme.Success).
 			Render("✓")
 
 	statusErrorIcon = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
+			Foreground(theme.Error).
 			Bold(true).
 			Render("✗")
 )
@@ -245,16 +246,16 @@ func formatOutputEntry(entry OutputEntry, width int) string {
 func formatToolUse(toolName string, width int) string {
 	// Create a styled tool use indicator
 	toolIcon := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
+		Foreground(theme.Info).
 		Bold(true).
 		Render("▶")
 
 	toolLabel := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("244")).
+		Foreground(theme.TextMuted).
 		Render("Tool:")
 
 	toolNameStyled := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
+		Foreground(theme.Info).
 		Bold(true).
 		Render(truncateString(toolName, width-15))
 

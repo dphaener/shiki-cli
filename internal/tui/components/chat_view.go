@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/tui/theme"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -283,37 +284,39 @@ func (c *ChatView) renderMessage(msg types.ChatMessage) string {
 
 	switch msg.Role {
 	case "user":
-		// User messages: right-aligned with proper width handling
-		// Calculate content width (matching assistant messages)
+		// User messages: slate background with ">" prefix for visual distinction
 		contentWidth := c.width - 8
 
-		// Use shared markdown renderer for consistent text handling (supports **bold**, `code`, etc.)
+		// Use shared markdown renderer for consistent text handling
 		renderer := GetMarkdownRenderer()
-		content := renderer.RenderWithStyle(msg.Content, contentWidth, userMessageStyle)
+		content := renderer.RenderWithStyle(msg.Content, contentWidth-4, userMessageStyle)
 
-		// Render header with explicit width for proper right-alignment
-		header := userHeaderStyle.Width(contentWidth).Render(fmt.Sprintf("You (%s)", timestamp))
+		// Add ">" prefix
+		prefix := lipgloss.NewStyle().
+			Foreground(theme.Primary).
+			Bold(true).
+			Render(">")
 
-		return lipgloss.JoinVertical(lipgloss.Right, header, content)
+		return prefix + " " + content
 
 	case "tool":
 		// Tool use messages: styled with icon and tool name
 		toolIcon := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("39")).
+			Foreground(theme.Info).
 			Bold(true).
 			Render("▶")
 
 		toolLabel := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(theme.TextMuted).
 			Render("Tool:")
 
 		toolName := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("39")).
+			Foreground(theme.Info).
 			Bold(true).
 			Render(msg.Content)
 
 		timestampStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(theme.TextMuted).
 			Render(fmt.Sprintf("(%s)", timestamp))
 
 		return lipgloss.NewStyle().
@@ -323,7 +326,7 @@ func (c *ChatView) renderMessage(msg types.ChatMessage) string {
 	case "error":
 		// Error messages: styled with warning icon and red text
 		errorIcon := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
+			Foreground(theme.Error).
 			Bold(true).
 			Render("⚠")
 
@@ -332,55 +335,41 @@ func (c *ChatView) renderMessage(msg types.ChatMessage) string {
 		return lipgloss.JoinVertical(lipgloss.Left, header, content)
 
 	default:
-		// Assistant messages: aligned left with markdown rendering
-		header := assistantHeaderStyle.Render(fmt.Sprintf("Assistant (%s)", timestamp))
-
-		// Use shared markdown renderer with proper width handling
+		// Assistant messages: no header, just content
 		renderer := GetMarkdownRenderer()
 		content := renderer.RenderWithStyle(msg.Content, c.width-8, assistantChatMessageStyle)
 
-		return lipgloss.JoinVertical(lipgloss.Left, header, content)
+		return content
 	}
 }
 
-// Styles for chat view
+// Styles for chat view using Sekkei Design System theme
 var (
-	userHeaderStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("39")).
-			Bold(true).
-			Align(lipgloss.Right).
-			Padding(0, 1)
-
-	assistantHeaderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("62")).
-				Bold(true).
-				Padding(0, 1)
-
 	userMessageStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("252")).
-				Background(lipgloss.Color("236")).
+				Foreground(theme.Slate200).
+				Background(theme.Slate700).
 				Padding(0, 1)
 
 	assistantChatMessageStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("252")).
+					Foreground(theme.Slate200).
 					Padding(0, 1)
 
 	chatInputSeparator = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("240"))
+				Foreground(theme.Border)
 
 	chatEmptyStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(theme.TextMuted).
 			Italic(true).
 			Padding(2, 2)
 
 	errorHeaderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("196")).
+				Foreground(theme.Error).
 				Bold(true).
 				Padding(0, 1)
 
 	errorMessageStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("196")).
-				Background(lipgloss.Color("52")).
+				Foreground(theme.Error).
+				Background(theme.ErrorLight).
 				Padding(1, 2).
 				MarginTop(0).
 				MarginBottom(1)

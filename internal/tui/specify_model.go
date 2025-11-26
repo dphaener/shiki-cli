@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/darinhaener/collab/internal/orchestrator"
 	"github.com/darinhaener/collab/internal/tui/components"
+	"github.com/darinhaener/collab/internal/tui/theme"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -445,9 +446,9 @@ func (m *SpecifyModel) renderFooter() string {
 
 // renderPane renders a pane with border and title
 func (m *SpecifyModel) renderPane(title, content string, width, height int, active bool) string {
-	borderStyle := paneBorderStyle
+	borderStyle := specifyPaneBorderStyle
 	if active {
-		borderStyle = selectedPaneBorderStyle
+		borderStyle = specifySelectedPaneBorderStyle
 	}
 
 	// Use MaxWidth and MaxHeight instead of fixed Width/Height for better flexibility
@@ -673,48 +674,48 @@ type AgentErrorMsg struct {
 	Err error
 }
 
-// Styles for specify mode
+// Styles for specify mode using Sekkei Design System theme
 var (
 	titleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("62")).
+			Foreground(theme.Primary).
 			Bold(true).
 			Padding(0, 1)
 
 	subtitleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(theme.TextMuted).
 			Padding(0, 1)
 
 	headerBoxStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderBottom(true).
-			BorderForeground(lipgloss.Color("240"))
+			BorderForeground(theme.Border)
 
 	footerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(theme.TextMuted).
 			Padding(0, 1)
 
 	footerBoxStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderTop(true).
-			BorderForeground(lipgloss.Color("240"))
+			BorderForeground(theme.Border)
 
-	paneBorderStyle = lipgloss.NewStyle().
+	specifyPaneBorderStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240")).
+			BorderForeground(theme.Border).
 			Padding(1)
 
-	selectedPaneBorderStyle = lipgloss.NewStyle().
+	specifySelectedPaneBorderStyle = lipgloss.NewStyle().
 				BorderStyle(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("62")).
+				BorderForeground(theme.BorderActive).
 				Padding(1)
 
 	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
+			Foreground(theme.Error).
 			Bold(true).
 			Padding(1)
 
 	quitMessageStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("42")).
+				Foreground(theme.Success).
 				Bold(true).
 				Padding(1)
 )

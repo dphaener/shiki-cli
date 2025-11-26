@@ -5,33 +5,34 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/tui/theme"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
-// Styles for turn list
+// Styles for turn list using Sekkei Design System theme
 var (
 	paneTitleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("62")).
+			Foreground(theme.Primary).
 			Padding(0, 1)
 
 	paneBorderStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240"))
+			BorderForeground(theme.Border)
 
 	selectedPaneBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("62"))
+				BorderForeground(theme.BorderActive)
 
 	turnStyle = lipgloss.NewStyle().
 			Padding(0, 1)
 
 	selectedTurnStyle = turnStyle.Copy().
-				Background(lipgloss.Color("240")).
+				Background(theme.Border).
 				Bold(true)
 
 	turnNumberStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")).
+			Foreground(theme.TextMuted).
 			Width(4)
 
 	turnAgentStyle = lipgloss.NewStyle().
@@ -39,21 +40,21 @@ var (
 			Width(15)
 
 	turnStatusRunningStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("39")).
+				Foreground(theme.Info).
 				Bold(true)
 
 	turnStatusCompletedStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("42"))
+					Foreground(theme.Success)
 
 	turnStatusErrorStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("196")).
+				Foreground(theme.Error).
 				Bold(true)
 
 	turnDurationStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("244"))
+				Foreground(theme.TextMuted)
 
 	turnCostStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("220"))
+			Foreground(theme.Warning)
 )
 
 // RenderTurnList renders the turn history list pane
