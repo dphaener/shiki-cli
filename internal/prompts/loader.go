@@ -108,3 +108,77 @@ func LoadPlanPrompt(data PlanPromptData) (string, error) {
 
 	return buf.String(), nil
 }
+
+// TasksPromptData contains the data for rendering the tasks prompt template
+type TasksPromptData struct {
+	FriendlyName  string
+	FeatureNumber int
+	Slug          string
+	SpecFile      string
+	PlanFile      string
+	TasksFile     string
+	FeatureDir    string
+}
+
+// LoadTasksPrompt loads and renders the tasks system prompt
+// It checks for an external override at .sekkei/templates/tasks-prompt.md first,
+// then falls back to the embedded default prompt
+func LoadTasksPrompt(data TasksPromptData) (string, error) {
+	promptContent := defaultTasksPrompt
+
+	// Check for external override
+	overridePath := filepath.Join(".sekkei", "templates", "tasks-prompt.md")
+	if content, err := os.ReadFile(overridePath); err == nil {
+		promptContent = string(content)
+	}
+
+	// Parse and execute template
+	tmpl, err := template.New("tasks-prompt").Parse(promptContent)
+	if err != nil {
+		return "", fmt.Errorf("parse tasks prompt template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("execute tasks prompt template: %w", err)
+	}
+
+	return buf.String(), nil
+}
+
+// ImplementPromptData contains the data for rendering the implement prompt template
+type ImplementPromptData struct {
+	FriendlyName  string
+	FeatureNumber int
+	Slug          string
+	SpecFile      string
+	PlanFile      string
+	TasksFile     string
+	FeatureDir    string
+}
+
+// LoadImplementPrompt loads and renders the implement system prompt
+// It checks for an external override at .sekkei/templates/implement-prompt.md first,
+// then falls back to the embedded default prompt
+func LoadImplementPrompt(data ImplementPromptData) (string, error) {
+	promptContent := defaultImplementPrompt
+
+	// Check for external override
+	overridePath := filepath.Join(".sekkei", "templates", "implement-prompt.md")
+	if content, err := os.ReadFile(overridePath); err == nil {
+		promptContent = string(content)
+	}
+
+	// Parse and execute template
+	tmpl, err := template.New("implement-prompt").Parse(promptContent)
+	if err != nil {
+		return "", fmt.Errorf("parse implement prompt template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("execute implement prompt template: %w", err)
+	}
+
+	return buf.String(), nil
+}

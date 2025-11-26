@@ -104,3 +104,28 @@ func RunPlanMode(session *types.PlanSession) error {
 
 	return nil
 }
+
+// RunWorkflowMode starts the TUI in unified workflow mode
+func RunWorkflowMode(session *types.WorkflowSession) error {
+	if session == nil {
+		return fmt.Errorf("workflow session cannot be nil")
+	}
+
+	// Create workflow model
+	model := NewWorkflowModel(session)
+
+	// Create Bubbletea program
+	p := tea.NewProgram(
+		model,
+		tea.WithAltScreen(),       // Use alternate screen buffer
+		tea.WithMouseCellMotion(), // Enable mouse support
+	)
+
+	// Run the program
+	_, err := p.Run()
+	if err != nil {
+		return fmt.Errorf("workflow TUI error: %w", err)
+	}
+
+	return nil
+}

@@ -1,0 +1,110 @@
+package components
+
+import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/tui/theme"
+	"github.com/darinhaener/collab/pkg/types"
+)
+
+// ProgressStepper displays workflow progress through phases
+type ProgressStepper struct {
+	phases       []types.WorkflowPhase
+	currentPhase types.WorkflowPhase
+	width        int
+}
+
+// NewProgressStepper creates a new progress stepper
+func NewProgressStepper(phases []types.WorkflowPhase, currentPhase types.WorkflowPhase) ProgressStepper {
+	return ProgressStepper{
+		phases:       phases,
+		currentPhase: currentPhase,
+		width:        80, // default
+	}
+}
+
+// SetWidth sets the width of the stepper
+func (p *ProgressStepper) SetWidth(width int) {
+	p.width = width
+}
+
+// SetCurrentPhase updates the current phase
+func (p *ProgressStepper) SetCurrentPhase(phase types.WorkflowPhase) {
+	p.currentPhase = phase
+}
+
+// View renders the progress stepper
+func (p ProgressStepper) View() string {
+	if len(p.phases) == 0 {
+		return ""
+	}
+
+	var parts []string
+	connector := stepperConnectorStyle.Render(" → ")
+
+	for i, phase := range p.phases {
+		status := types.GetPhaseStatus(phase, p.currentPhase)
+		name := types.GetPhaseName(phase)
+		stepNumber := i + 1
+
+		// Render step with status indicator
+		step := p.renderStep(stepNumber, name, status)
+		parts = append(parts, step)
+
+		// Add connector between steps (not after last)
+		if i < len(p.phases)-1 {
+			parts = append(parts, connector)
+		}
+	}
+
+	// Join all parts
+	stepperContent := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
+
+	// Center in available width
+	return stepperContainerStyle.
+		Width(p.width).
+		Render(stepperContent)
+}
+
+// renderStep renders a single step with number and name
+func (p ProgressStepper) renderStep(number int, name string, status types.WorkflowPhaseStatus) string {
+	var style lipgloss.Style
+	var indicator string
+
+	switch status {
+	case types.PhaseStatusComplete:
+		style = stepCompleteStyle
+		indicator = "✓"
+	case types.PhaseStatusCurrent:
+		style = stepCurrentStyle
+		indicator = "●"
+	default: // pending
+		style = stepPendingStyle
+		indicator = "○"
+	}
+
+	// Format: [indicator] number. Name
+	stepText := indicator + " " + name
+	return style.Render(stepText)
+}
+
+// Styles for progress stepper
+var (
+	stepperContainerStyle = lipgloss.NewStyle().
+		Padding(0, 1).
+		AlignHorizontal(lipgloss.Center)
+
+	stepperConnectorStyle = lipgloss.NewStyle().
+		Foreground(theme.TextMuted)
+
+	stepCompleteStyle = lipgloss.NewStyle().
+		Foreground(theme.Success).
+		Bold(false)
+
+	stepCurrentStyle = lipgloss.NewStyle().
+		Foreground(theme.Primary).
+		Bold(true)
+
+	stepPendingStyle = lipgloss.NewStyle().
+		Foreground(theme.TextMuted).
+		Bold(false)
+)
