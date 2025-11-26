@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -167,6 +168,9 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.chatView.AddToolUse(toolMsg)
 
+			// Refresh preview from file - agent may have written spec
+			m.refreshSpecPreviewFromFile()
+
 		case "tool_error":
 			// Show tool error to user
 			m.chatView.AddError(fmt.Errorf("Tool failed: %s", msg.update.Content))
@@ -201,13 +205,15 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.session.ChatHistory = append(m.session.ChatHistory, assistantMsg)
 
-				// Check if this response contains spec content and update preview
+				// Update phase indicators based on message content
 				m.updateSpecPreviewFromMessage(m.responseBuffer)
 
 				m.responseBuffer = ""
 			}
 			// Mark streaming as finished
 			m.chatView.FinishStreaming()
+			// Refresh preview from file to show actual spec content
+			m.refreshSpecPreviewFromFile()
 			m.waitingForAI = false
 			m.activeUpdateChan = nil
 			m.activeErrorChan = nil
@@ -227,13 +233,15 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.session.ChatHistory = append(m.session.ChatHistory, assistantMsg)
 
-			// Check if this response contains spec content and update preview
+			// Update phase indicators based on message content
 			m.updateSpecPreviewFromMessage(m.responseBuffer)
 
 			m.responseBuffer = ""
 		}
 		// Mark streaming as finished
 		m.chatView.FinishStreaming()
+		// Refresh preview from file to show actual spec content
+		m.refreshSpecPreviewFromFile()
 		m.waitingForAI = false
 		m.activeUpdateChan = nil
 		m.activeErrorChan = nil
@@ -497,25 +505,51 @@ type agentUpdate struct {
 // agentStreamComplete signals that streaming is complete
 type agentStreamComplete struct{}
 
-// updateSpecPreviewFromMessage checks if a message contains spec content and updates the preview
-func (m *SpecifyModel) updateSpecPreviewFromMessage(content string) {
-	// Check if this looks like a specification document
-	// Specs typically have markdown headers and specific sections
-	if !isSpecContent(content) {
+// refreshSpecPreviewFromFile reads the spec file from disk and updates the preview
+func (m *SpecifyModel) refreshSpecPreviewFromFile() {
+	if m.session.SpecFile == "" {
 		return
 	}
 
-	// Update session spec
-	m.session.CurrentSpec = content
+	content, err := os.ReadFile(m.session.SpecFile)
+	if err != nil {
+		return // File may not exist yet
+	}
 
-	// Update spec preview
-	m.specPreview.SetContent(content)
+	// Strip YAML frontmatter if present
+	specContent := stripFrontmatter(string(content))
+	if specContent == "" {
+		return
+	}
 
-	// Update phase if we're generating
-	if m.session.Phase == types.PhaseDiscovery && containsSpecSections(content) {
+	m.specPreview.SetContent(specContent)
+	m.session.CurrentSpec = specContent
+
+	// Update phase based on content
+	if containsSpecSections(specContent) {
 		m.session.Phase = types.PhaseGeneration
 		m.specPreview.SetPhase(types.PhaseGeneration)
-	} else if m.session.Phase == types.PhaseGeneration {
+	}
+}
+
+// stripFrontmatter removes YAML frontmatter from markdown content
+func stripFrontmatter(content string) string {
+	if !strings.HasPrefix(content, "---") {
+		return content
+	}
+	parts := strings.SplitN(content, "---", 3)
+	if len(parts) >= 3 {
+		return strings.TrimSpace(parts[2])
+	}
+	return content
+}
+
+// updateSpecPreviewFromMessage updates phase indicators based on message content
+// Note: Actual spec content is read from file via refreshSpecPreviewFromFile()
+func (m *SpecifyModel) updateSpecPreviewFromMessage(content string) {
+	// Only update phase indicators, not content (content comes from file)
+	if m.session.Phase == types.PhaseDiscovery && containsSpecSections(content) {
+		m.session.Phase = types.PhaseGeneration
 		m.specPreview.SetPhase(types.PhaseGeneration)
 	}
 }
