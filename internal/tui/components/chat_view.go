@@ -267,9 +267,17 @@ func (c *ChatView) renderMessage(msg types.ChatMessage) string {
 
 	switch msg.Role {
 	case "user":
-		// User messages: aligned right with different style
-		header := userHeaderStyle.Render(fmt.Sprintf("You (%s)", timestamp))
-		content := userMessageStyle.Render(msg.Content)
+		// User messages: right-aligned with proper width handling
+		// Calculate content width (matching assistant messages)
+		contentWidth := c.width - 8
+
+		// Use shared markdown renderer for consistent text handling (supports **bold**, `code`, etc.)
+		renderer := GetMarkdownRenderer()
+		content := renderer.RenderWithStyle(msg.Content, contentWidth, userMessageStyle)
+
+		// Render header with explicit width for proper right-alignment
+		header := userHeaderStyle.Width(contentWidth).Render(fmt.Sprintf("You (%s)", timestamp))
+
 		return lipgloss.JoinVertical(lipgloss.Right, header, content)
 
 	case "tool":
@@ -335,8 +343,7 @@ var (
 	userMessageStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("252")).
 				Background(lipgloss.Color("236")).
-				Padding(0, 1).
-				Align(lipgloss.Right)
+				Padding(0, 1)
 
 	assistantChatMessageStyle = lipgloss.NewStyle().
 					Foreground(lipgloss.Color("252")).
