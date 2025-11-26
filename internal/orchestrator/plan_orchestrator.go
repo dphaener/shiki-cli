@@ -9,6 +9,7 @@ import (
 
 	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
 	agentpkg "github.com/darinhaener/collab/internal/agent"
+	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -21,17 +22,19 @@ type PlanOrchestrator struct {
 	cancel           context.CancelFunc
 	planInstructions string // Instructions sent as first message to prime the agent
 	instructionsSent bool   // Whether we've sent the initial instructions
+	eventBus         *events.EventBus // Event bus for publishing assistant events
 }
 
 // NewPlanOrchestrator creates a new plan orchestrator
-func NewPlanOrchestrator(session *types.PlanSession, apiKey string) *PlanOrchestrator {
+func NewPlanOrchestrator(session *types.PlanSession, apiKey string, eventBus *events.EventBus) *PlanOrchestrator {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &PlanOrchestrator{
-		session: session,
-		apiKey:  apiKey,
-		ctx:     ctx,
-		cancel:  cancel,
+		session:  session,
+		apiKey:   apiKey,
+		ctx:      ctx,
+		cancel:   cancel,
+		eventBus: eventBus,
 	}
 }
 
@@ -121,10 +124,49 @@ func (o *PlanOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate
 			if err := client.Query(queryCtx, messageToSend); err != nil {
 				cancel()
 				logger.log("ERROR: failed to send query: %v", err)
+
+				// Publish assistant error event if eventBus is available
+				if o.eventBus != nil {
+					errorEvent := events.NewAssistantError(
+						o.session.ID,
+						"plan",
+						o.session.ID, // Using session ID as agent ID for now
+						"query_error",
+						fmt.Sprintf("Failed to send query: %v", err),
+						fmt.Sprintf("Attempt %d/%d", attempt+1, maxRetries+1),
+						"retry",
+						map[string]interface{}{
+							"feature_number": o.session.FeatureNumber,
+							"spec_slug":     o.session.SpecSlug,
+							"attempt":       attempt + 1,
+							"message_length": len(messageToSend),
+						},
+					)
+					o.eventBus.Publish(errorEvent)
+				}
+
 				errorChan <- fmt.Errorf("failed to send query: %w", err)
 				return
 			}
 			logger.log("Query sent successfully")
+
+			// Publish assistant request event if eventBus is available
+			if o.eventBus != nil {
+				assistantEvent := events.NewAssistantRequest(
+					o.session.ID,
+					"plan",
+					o.session.ID, // Using session ID as agent ID for now
+					o.session.ID, // Using session ID as conversation ID
+					messageToSend,
+					map[string]interface{}{
+						"feature_number": o.session.FeatureNumber,
+						"spec_slug":     o.session.SpecSlug,
+						"attempt":       attempt + 1,
+						"message_length": len(messageToSend),
+					},
+				)
+				o.eventBus.Publish(assistantEvent)
+			}
 
 			// Receive messages
 			msgChan, errChan := client.ReceiveMessages(queryCtx)
@@ -190,9 +232,30 @@ func (o *PlanOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate
 						logger.log("Channel closed (ok=false), sending completion")
 						// Channel truly closed - send completion signal
 						if responseBuilder.Len() > 0 {
+							finalResponse := responseBuilder.String()
 							updateChan <- MessageUpdate{
 								Type:    "complete",
-								Content: responseBuilder.String(),
+								Content: finalResponse,
+							}
+
+							// Publish assistant response event if eventBus is available
+							if o.eventBus != nil {
+								responseEvent := events.NewAssistantResponse(
+									o.session.ID,
+									"plan",
+									o.session.ID, // Using session ID as agent ID for now
+									o.session.ID, // Using session ID as conversation ID
+									finalResponse,
+									0, // Token count not available here
+									0, // Timing not available here
+									"", // Model not available here
+									map[string]interface{}{
+										"feature_number": o.session.FeatureNumber,
+										"spec_slug":     o.session.SpecSlug,
+										"response_length": len(finalResponse),
+									},
+								)
+								o.eventBus.Publish(responseEvent)
 							}
 						}
 						completed = true
@@ -298,9 +361,30 @@ func (o *PlanOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate
 						logger.log("Processing result message - COMPLETING")
 						// Result message signals completion
 						if responseBuilder.Len() > 0 {
+							finalResponse := responseBuilder.String()
 							updateChan <- MessageUpdate{
 								Type:    "complete",
-								Content: responseBuilder.String(),
+								Content: finalResponse,
+							}
+
+							// Publish assistant response event if eventBus is available
+							if o.eventBus != nil {
+								responseEvent := events.NewAssistantResponse(
+									o.session.ID,
+									"plan",
+									o.session.ID, // Using session ID as agent ID for now
+									o.session.ID, // Using session ID as conversation ID
+									finalResponse,
+									0, // Token count not available here
+									0, // Timing not available here
+									"", // Model not available here
+									map[string]interface{}{
+										"feature_number": o.session.FeatureNumber,
+										"spec_slug":     o.session.SpecSlug,
+										"response_length": len(finalResponse),
+									},
+								)
+								o.eventBus.Publish(responseEvent)
 							}
 						}
 						completed = true

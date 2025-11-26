@@ -2,8 +2,10 @@ package logging
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -21,6 +23,7 @@ const (
 type Logger struct {
 	level  Level
 	output io.Writer
+	mu     sync.Mutex // Protects concurrent writes to output
 }
 
 // NewLogger creates a new logger with specified level and output
@@ -56,8 +59,18 @@ func (l *Logger) log(level Level, msg string, fields map[string]interface{}) {
 		Fields:    fields,
 	}
 
-	data, _ := json.Marshal(entry)
+	data, err := json.Marshal(entry)
+	if err != nil {
+		// Fallback: log the error itself in a safe way
+		fallback := fmt.Sprintf(`{"timestamp":"%s","level":"error","message":"json_marshal_error","fields":{"error":"%s"}}`,
+			time.Now().Format(time.RFC3339), err.Error())
+		data = []byte(fallback)
+	}
+
+	// Synchronize writes to prevent race conditions and corrupted output
+	l.mu.Lock()
 	_, _ = l.output.Write(append(data, '\n')) // Ignore write errors (best effort logging)
+	l.mu.Unlock()
 }
 
 // Debug logs a debug-level message

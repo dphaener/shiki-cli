@@ -89,6 +89,51 @@ type (
 		CurrentCost float64
 		Limit       float64
 	}
+
+	// Assistant logging event payloads
+	AssistantRequestPayload struct {
+		SessionID      string                 `json:"session_id"`
+		OrchestratorID string                 `json:"orchestrator"`
+		AgentID        string                 `json:"agent_id"`
+		ConversationID string                 `json:"conversation_id"`
+		Content        string                 `json:"content"`
+		Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	}
+
+	AssistantResponsePayload struct {
+		SessionID      string                 `json:"session_id"`
+		OrchestratorID string                 `json:"orchestrator"`
+		AgentID        string                 `json:"agent_id"`
+		ConversationID string                 `json:"conversation_id"`
+		Content        string                 `json:"content"`
+		TokensUsed     int                    `json:"tokens_used,omitempty"`
+		TimingMs       int64                  `json:"timing_ms,omitempty"`
+		Model          string                 `json:"model,omitempty"`
+		Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	}
+
+	AssistantErrorPayload struct {
+		SessionID      string                 `json:"session_id"`
+		OrchestratorID string                 `json:"orchestrator"`
+		AgentID        string                 `json:"agent_id"`
+		ErrorType      string                 `json:"error_type"`
+		ErrorMessage   string                 `json:"error_message"`
+		Context        string                 `json:"context,omitempty"`
+		RecoveryAction string                 `json:"recovery_action,omitempty"`
+		Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	}
+
+	AssistantMetadataPayload struct {
+		SessionID       string                 `json:"session_id"`
+		OrchestratorID  string                 `json:"orchestrator"`
+		AgentID         string                 `json:"agent_id"`
+		TokensUsed      int                    `json:"tokens_used,omitempty"`
+		Cost            float64                `json:"cost,omitempty"`
+		DurationMs      int64                  `json:"duration_ms,omitempty"`
+		Model           string                 `json:"model,omitempty"`
+		PerformanceData map[string]interface{} `json:"performance_data,omitempty"`
+		Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	}
 )
 
 // Helper constructors for common events
@@ -224,5 +269,78 @@ func NewCostThresholdExceeded(agentID, sessionID string, currentCost, limit floa
 		SessionID: sessionID,
 		Timestamp: time.Now(),
 		Payload:   CostThresholdExceededPayload{AgentID: agentID, CurrentCost: currentCost, Limit: limit},
+	}
+}
+
+// Helper constructors for assistant logging events
+func NewAssistantRequest(sessionID, orchestratorID, agentID, conversationID, content string, metadata map[string]interface{}) Event {
+	return Event{
+		Type:      types.EventAssistantRequest,
+		SessionID: sessionID,
+		Timestamp: time.Now(),
+		Payload: AssistantRequestPayload{
+			SessionID:      sessionID,
+			OrchestratorID: orchestratorID,
+			AgentID:        agentID,
+			ConversationID: conversationID,
+			Content:        content,
+			Metadata:       metadata,
+		},
+	}
+}
+
+func NewAssistantResponse(sessionID, orchestratorID, agentID, conversationID, content string, tokensUsed int, timingMs int64, model string, metadata map[string]interface{}) Event {
+	return Event{
+		Type:      types.EventAssistantResponse,
+		SessionID: sessionID,
+		Timestamp: time.Now(),
+		Payload: AssistantResponsePayload{
+			SessionID:      sessionID,
+			OrchestratorID: orchestratorID,
+			AgentID:        agentID,
+			ConversationID: conversationID,
+			Content:        content,
+			TokensUsed:     tokensUsed,
+			TimingMs:       timingMs,
+			Model:          model,
+			Metadata:       metadata,
+		},
+	}
+}
+
+func NewAssistantError(sessionID, orchestratorID, agentID, errorType, errorMessage, context, recoveryAction string, metadata map[string]interface{}) Event {
+	return Event{
+		Type:      types.EventAssistantError,
+		SessionID: sessionID,
+		Timestamp: time.Now(),
+		Payload: AssistantErrorPayload{
+			SessionID:      sessionID,
+			OrchestratorID: orchestratorID,
+			AgentID:        agentID,
+			ErrorType:      errorType,
+			ErrorMessage:   errorMessage,
+			Context:        context,
+			RecoveryAction: recoveryAction,
+			Metadata:       metadata,
+		},
+	}
+}
+
+func NewAssistantMetadata(sessionID, orchestratorID, agentID string, tokensUsed int, cost float64, durationMs int64, model string, performanceData, metadata map[string]interface{}) Event {
+	return Event{
+		Type:      types.EventAssistantMetadata,
+		SessionID: sessionID,
+		Timestamp: time.Now(),
+		Payload: AssistantMetadataPayload{
+			SessionID:       sessionID,
+			OrchestratorID:  orchestratorID,
+			AgentID:         agentID,
+			TokensUsed:      tokensUsed,
+			Cost:            cost,
+			DurationMs:      durationMs,
+			Model:           model,
+			PerformanceData: performanceData,
+			Metadata:        metadata,
+		},
 	}
 }
