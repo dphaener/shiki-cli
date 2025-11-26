@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/internal/storage"
 	"github.com/darinhaener/collab/internal/tui/components"
 	"github.com/darinhaener/collab/internal/tui/theme"
@@ -14,7 +15,8 @@ import (
 
 // WorkflowModel manages the unified feature workflow TUI
 type WorkflowModel struct {
-	session *types.WorkflowSession
+	session  *types.WorkflowSession
+	eventBus *events.EventBus
 
 	// Embedded phase models
 	specifyModel   *SpecifyModel
@@ -42,7 +44,7 @@ type WorkflowModel struct {
 }
 
 // NewWorkflowModel creates a new workflow model
-func NewWorkflowModel(session *types.WorkflowSession) WorkflowModel {
+func NewWorkflowModel(session *types.WorkflowSession, eventBus *events.EventBus) WorkflowModel {
 	// Create progress stepper
 	stepper := components.NewProgressStepper(types.GetDisplayPhases(), session.CurrentPhase)
 
@@ -51,6 +53,7 @@ func NewWorkflowModel(session *types.WorkflowSession) WorkflowModel {
 
 	model := WorkflowModel{
 		session:         session,
+		eventBus:        eventBus,
 		progressStepper: stepper,
 		approvalBar:     approvalBar,
 		ready:           false,
@@ -71,7 +74,7 @@ func (m *WorkflowModel) initializePhaseModel() {
 	case types.WorkflowPhaseSpecify:
 		// Create specify session from workflow session
 		specifySession := m.createSpecifySession()
-		specModel := NewSpecifyModel(specifySession)
+		specModel := NewSpecifyModel(specifySession, m.eventBus)
 		m.specifyModel = &specModel
 		m.activePhaseModel = &specModel
 
@@ -83,7 +86,7 @@ func (m *WorkflowModel) initializePhaseModel() {
 	case types.WorkflowPhasePlan:
 		// Create plan session from workflow session
 		planSession := m.createPlanSession()
-		planModel := NewPlanModel(planSession)
+		planModel := NewPlanModel(planSession, m.eventBus)
 		m.planModel = &planModel
 		m.activePhaseModel = &planModel
 
@@ -94,7 +97,7 @@ func (m *WorkflowModel) initializePhaseModel() {
 
 	case types.WorkflowPhaseTasks:
 		// Create tasks model
-		tasksModel := NewTasksModel(m.session)
+		tasksModel := NewTasksModel(m.session, m.eventBus)
 		m.tasksModel = &tasksModel
 		m.activePhaseModel = &tasksModel
 
@@ -105,7 +108,7 @@ func (m *WorkflowModel) initializePhaseModel() {
 
 	case types.WorkflowPhaseImplement:
 		// Create implement model
-		implementModel := NewImplementModel(m.session)
+		implementModel := NewImplementModel(m.session, m.eventBus)
 		m.implementModel = &implementModel
 		m.activePhaseModel = &implementModel
 	}

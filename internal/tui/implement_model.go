@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/internal/orchestrator"
 	"github.com/darinhaener/collab/internal/tui/components"
 	"github.com/darinhaener/collab/internal/tui/theme"
@@ -26,6 +27,7 @@ const (
 type ImplementModel struct {
 	session           *types.WorkflowSession
 	orchestrator      *orchestrator.ImplementOrchestrator
+	eventBus          *events.EventBus
 	chatView          components.ChatView
 	implementPreview  components.ImplementPreview
 	width             int
@@ -45,12 +47,13 @@ type ImplementModel struct {
 }
 
 // NewImplementModel creates a new implement model
-func NewImplementModel(session *types.WorkflowSession) ImplementModel {
+func NewImplementModel(session *types.WorkflowSession, eventBus *events.EventBus) ImplementModel {
 	chatView := components.NewChatView(80, 24)
 	implementPreview := components.NewImplementPreview(80, 24)
 
 	return ImplementModel{
 		session:          session,
+		eventBus:         eventBus,
 		chatView:         chatView,
 		implementPreview: implementPreview,
 		ready:            false,
@@ -63,15 +66,15 @@ func (m ImplementModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.chatView.Init(),
 		m.implementPreview.Init(),
-		initializeImplementAgent(m.session),
+		initializeImplementAgent(m.session, m.eventBus),
 	)
 }
 
 // initializeImplementAgent initializes the AI agent for implementation
-func initializeImplementAgent(session *types.WorkflowSession) tea.Cmd {
+func initializeImplementAgent(session *types.WorkflowSession, eventBus *events.EventBus) tea.Cmd {
 	return func() tea.Msg {
 		apiKey := orchestrator.GetAPIKey()
-		orch := orchestrator.NewImplementOrchestrator(session, apiKey)
+		orch := orchestrator.NewImplementOrchestrator(session, apiKey, eventBus)
 
 		if err := orch.Initialize(); err != nil {
 			return ImplementAgentErrorMsg{Err: err}

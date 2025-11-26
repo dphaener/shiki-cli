@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/darinhaener/collab/internal/events"
+	"github.com/darinhaener/collab/internal/logging"
 	"github.com/darinhaener/collab/internal/orchestrator"
 	"github.com/darinhaener/collab/pkg/types"
 	"github.com/spf13/cobra"
@@ -83,6 +84,17 @@ func resumeHeadless(session *types.Session, apiKey string) error {
 	// Create event bus
 	eventBus := events.NewEventBus(100)
 	defer eventBus.Shutdown()
+
+	// Start assistant event logger
+	assistantLogger, err := logging.NewAssistantEventLogger()
+	if err != nil {
+		PrintWarning("Failed to initialize assistant logger: %v", err)
+	} else {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		assistantLogger.Start(ctx, eventBus)
+		defer assistantLogger.Close()
+	}
 
 	// Subscribe to events for progress display
 	subscriber := eventBus.Subscribe("cli-resume")

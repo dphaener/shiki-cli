@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/darinhaener/collab/internal/events"
+	"github.com/darinhaener/collab/internal/logging"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -61,8 +63,21 @@ func RunSpecifyMode(session *types.SpecifySession) error {
 		return fmt.Errorf("specify session cannot be nil")
 	}
 
+	// Create event bus for assistant logging
+	bus := events.NewEventBus(100)
+	defer bus.Shutdown()
+
+	// Start assistant event logger
+	assistantLogger, err := logging.NewAssistantEventLogger()
+	if err == nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		assistantLogger.Start(ctx, bus)
+		defer assistantLogger.Close()
+	}
+
 	// Create specify model
-	model := NewSpecifyModel(session)
+	model := NewSpecifyModel(session, bus)
 
 	// Create Bubbletea program
 	p := tea.NewProgram(
@@ -72,7 +87,7 @@ func RunSpecifyMode(session *types.SpecifySession) error {
 	)
 
 	// Run the program
-	_, err := p.Run()
+	_, err = p.Run()
 	if err != nil {
 		return fmt.Errorf("specify TUI error: %w", err)
 	}
@@ -86,8 +101,21 @@ func RunPlanMode(session *types.PlanSession) error {
 		return fmt.Errorf("plan session cannot be nil")
 	}
 
+	// Create event bus for assistant logging
+	bus := events.NewEventBus(100)
+	defer bus.Shutdown()
+
+	// Start assistant event logger
+	assistantLogger, err := logging.NewAssistantEventLogger()
+	if err == nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		assistantLogger.Start(ctx, bus)
+		defer assistantLogger.Close()
+	}
+
 	// Create plan model
-	model := NewPlanModel(session)
+	model := NewPlanModel(session, bus)
 
 	// Create Bubbletea program
 	p := tea.NewProgram(
@@ -97,7 +125,7 @@ func RunPlanMode(session *types.PlanSession) error {
 	)
 
 	// Run the program
-	_, err := p.Run()
+	_, err = p.Run()
 	if err != nil {
 		return fmt.Errorf("plan TUI error: %w", err)
 	}
@@ -111,8 +139,21 @@ func RunWorkflowMode(session *types.WorkflowSession) error {
 		return fmt.Errorf("workflow session cannot be nil")
 	}
 
+	// Create event bus for assistant logging
+	bus := events.NewEventBus(100)
+	defer bus.Shutdown()
+
+	// Start assistant event logger
+	assistantLogger, err := logging.NewAssistantEventLogger()
+	if err == nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		assistantLogger.Start(ctx, bus)
+		defer assistantLogger.Close()
+	}
+
 	// Create workflow model
-	model := NewWorkflowModel(session)
+	model := NewWorkflowModel(session, bus)
 
 	// Create Bubbletea program
 	p := tea.NewProgram(
@@ -122,7 +163,7 @@ func RunWorkflowMode(session *types.WorkflowSession) error {
 	)
 
 	// Run the program
-	_, err := p.Run()
+	_, err = p.Run()
 	if err != nil {
 		return fmt.Errorf("workflow TUI error: %w", err)
 	}

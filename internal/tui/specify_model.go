@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/internal/orchestrator"
 	"github.com/darinhaener/collab/internal/tui/components"
 	"github.com/darinhaener/collab/internal/tui/theme"
@@ -26,6 +27,7 @@ const (
 type SpecifyModel struct {
 	session           *types.SpecifySession
 	orchestrator      *orchestrator.SpecifyOrchestrator
+	eventBus          *events.EventBus
 	chatView          components.ChatView
 	specPreview       components.SpecPreview
 	width             int
@@ -41,13 +43,14 @@ type SpecifyModel struct {
 }
 
 // NewSpecifyModel creates a new specify model
-func NewSpecifyModel(session *types.SpecifySession) SpecifyModel {
+func NewSpecifyModel(session *types.SpecifySession, eventBus *events.EventBus) SpecifyModel {
 	// Initialize with default sizes - will be updated on first WindowSizeMsg
 	chatView := components.NewChatView(80, 24)
 	specPreview := components.NewSpecPreview(80, 24)
 
 	return SpecifyModel{
 		session:     session,
+		eventBus:    eventBus,
 		chatView:    chatView,
 		specPreview: specPreview,
 		ready:       false,
@@ -61,15 +64,15 @@ func (m SpecifyModel) Init() tea.Cmd {
 		tea.EnterAltScreen, // Enter alt screen FIRST to isolate from terminal
 		m.chatView.Init(),
 		m.specPreview.Init(),
-		initializeAgent(m.session),
+		initializeAgent(m.session, m.eventBus),
 	)
 }
 
 // initializeAgent initializes the AI agent
-func initializeAgent(session *types.SpecifySession) tea.Cmd {
+func initializeAgent(session *types.SpecifySession, eventBus *events.EventBus) tea.Cmd {
 	return func() tea.Msg {
 		apiKey := orchestrator.GetAPIKey()
-		orch := orchestrator.NewSpecifyOrchestrator(session, apiKey)
+		orch := orchestrator.NewSpecifyOrchestrator(session, apiKey, eventBus)
 
 		if err := orch.Initialize(); err != nil {
 			return AgentErrorMsg{Err: err}

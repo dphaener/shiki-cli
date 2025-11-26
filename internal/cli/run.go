@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/darinhaener/collab/internal/events"
+	"github.com/darinhaener/collab/internal/logging"
 	"github.com/darinhaener/collab/internal/orchestrator"
 	"github.com/darinhaener/collab/internal/storage"
 	"github.com/darinhaener/collab/internal/template"
@@ -131,6 +132,17 @@ func runHeadless(session *types.Session, apiKey string) error {
 	eventBus := events.NewEventBus(100)
 	defer eventBus.Shutdown()
 
+	// Start assistant event logger
+	assistantLogger, err := logging.NewAssistantEventLogger()
+	if err != nil {
+		PrintWarning("Failed to initialize assistant logger: %v", err)
+	} else {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		assistantLogger.Start(ctx, eventBus)
+		defer assistantLogger.Close()
+	}
+
 	// Subscribe to events for progress display
 	subscriber := eventBus.Subscribe("cli-display")
 	go displayEvents(subscriber.Events(), session)
@@ -171,6 +183,17 @@ func runWithTUI(session *types.Session, apiKey string) error {
 	// Create event bus
 	eventBus := events.NewEventBus(100)
 	defer eventBus.Shutdown()
+
+	// Start assistant event logger
+	assistantLogger, err := logging.NewAssistantEventLogger()
+	if err != nil {
+		PrintWarning("Failed to initialize assistant logger: %v", err)
+	} else {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		assistantLogger.Start(ctx, eventBus)
+		defer assistantLogger.Close()
+	}
 
 	// Create orchestrator
 	orch := orchestrator.NewOrchestrator(session, eventBus, apiKey)

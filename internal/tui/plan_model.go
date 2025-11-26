@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/internal/orchestrator"
 	"github.com/darinhaener/collab/internal/tui/components"
 	"github.com/darinhaener/collab/internal/tui/theme"
@@ -26,6 +27,7 @@ const (
 type PlanModel struct {
 	session          *types.PlanSession
 	orchestrator     *orchestrator.PlanOrchestrator
+	eventBus         *events.EventBus
 	chatView         components.ChatView
 	planPreview      components.PlanPreview
 	width            int
@@ -41,13 +43,14 @@ type PlanModel struct {
 }
 
 // NewPlanModel creates a new plan model
-func NewPlanModel(session *types.PlanSession) PlanModel {
+func NewPlanModel(session *types.PlanSession, eventBus *events.EventBus) PlanModel {
 	// Initialize with default sizes - will be updated on first WindowSizeMsg
 	chatView := components.NewChatView(80, 24)
 	planPreview := components.NewPlanPreview(80, 24)
 
 	return PlanModel{
 		session:     session,
+		eventBus:    eventBus,
 		chatView:    chatView,
 		planPreview: planPreview,
 		ready:       false,
@@ -61,15 +64,15 @@ func (m PlanModel) Init() tea.Cmd {
 		tea.EnterAltScreen, // Enter alt screen FIRST to isolate from terminal
 		m.chatView.Init(),
 		m.planPreview.Init(),
-		initializePlanAgent(m.session),
+		initializePlanAgent(m.session, m.eventBus),
 	)
 }
 
 // initializePlanAgent initializes the AI agent for planning
-func initializePlanAgent(session *types.PlanSession) tea.Cmd {
+func initializePlanAgent(session *types.PlanSession, eventBus *events.EventBus) tea.Cmd {
 	return func() tea.Msg {
 		apiKey := orchestrator.GetAPIKey()
-		orch := orchestrator.NewPlanOrchestrator(session, apiKey)
+		orch := orchestrator.NewPlanOrchestrator(session, apiKey, eventBus)
 
 		if err := orch.Initialize(); err != nil {
 			return PlanAgentErrorMsg{Err: err}

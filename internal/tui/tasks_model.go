@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/internal/orchestrator"
 	"github.com/darinhaener/collab/internal/tui/components"
 	"github.com/darinhaener/collab/internal/tui/theme"
@@ -26,6 +27,7 @@ const (
 type TasksModel struct {
 	session          *types.WorkflowSession
 	orchestrator     *orchestrator.TasksOrchestrator
+	eventBus         *events.EventBus
 	chatView         components.ChatView
 	tasksPreview     components.TasksPreview
 	width            int
@@ -42,12 +44,13 @@ type TasksModel struct {
 }
 
 // NewTasksModel creates a new tasks model
-func NewTasksModel(session *types.WorkflowSession) TasksModel {
+func NewTasksModel(session *types.WorkflowSession, eventBus *events.EventBus) TasksModel {
 	chatView := components.NewChatView(80, 24)
 	tasksPreview := components.NewTasksPreview(80, 24)
 
 	return TasksModel{
 		session:      session,
+		eventBus:     eventBus,
 		chatView:     chatView,
 		tasksPreview: tasksPreview,
 		ready:        false,
@@ -60,15 +63,15 @@ func (m TasksModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.chatView.Init(),
 		m.tasksPreview.Init(),
-		initializeTasksAgent(m.session),
+		initializeTasksAgent(m.session, m.eventBus),
 	)
 }
 
 // initializeTasksAgent initializes the AI agent for task generation
-func initializeTasksAgent(session *types.WorkflowSession) tea.Cmd {
+func initializeTasksAgent(session *types.WorkflowSession, eventBus *events.EventBus) tea.Cmd {
 	return func() tea.Msg {
 		apiKey := orchestrator.GetAPIKey()
-		orch := orchestrator.NewTasksOrchestrator(session, apiKey)
+		orch := orchestrator.NewTasksOrchestrator(session, apiKey, eventBus)
 
 		if err := orch.Initialize(); err != nil {
 			return TasksAgentErrorMsg{Err: err}

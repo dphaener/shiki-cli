@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"path/filepath"
 
 	"github.com/darinhaener/collab/internal/config"
 	"github.com/darinhaener/collab/internal/events"
+	"github.com/darinhaener/collab/internal/logging"
 	"github.com/darinhaener/collab/internal/storage"
 	"github.com/darinhaener/collab/internal/tui"
 	"github.com/spf13/cobra"
@@ -49,6 +51,17 @@ Keyboard shortcuts:
 			// For running sessions, this should connect to the live orchestrator's bus
 			bus := events.NewEventBus(100)
 			defer bus.Shutdown()
+
+			// Start assistant event logger
+			assistantLogger, err := logging.NewAssistantEventLogger()
+			if err != nil {
+				PrintWarning("Failed to initialize assistant logger: %v", err)
+			} else {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				assistantLogger.Start(ctx, bus)
+				defer assistantLogger.Close()
+			}
 
 			PrintInfo("Launching TUI for session %s...", sessionID)
 			PrintInfo("Status: %s", session.Status)
