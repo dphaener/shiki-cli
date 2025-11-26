@@ -271,9 +271,9 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		chatWidth := int(float64(msg.Width) * 0.6)
 		previewWidth := msg.Width - chatWidth
 
-		// Account for pane borders (2 chars per side = 4 total)
-		m.chatView.SetSize(chatWidth-4, availableHeight-2)
-		m.specPreview.SetSize(previewWidth-4, availableHeight-2)
+		// Account for pane borders (2) + padding (2) = 4 total for both width and height
+		m.chatView.SetSize(chatWidth-4, availableHeight-4)
+		m.specPreview.SetSize(previewWidth-4, availableHeight-4)
 
 		if !m.ready {
 			m.ready = true

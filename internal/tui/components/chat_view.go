@@ -14,7 +14,7 @@ import (
 )
 
 // maxInputHeight is the fixed height of the input container (textarea grows upward within it)
-const maxInputHeight = 5
+const maxInputHeight = 3
 
 // ChatView manages the chat interface for specification collaboration
 type ChatView struct {
