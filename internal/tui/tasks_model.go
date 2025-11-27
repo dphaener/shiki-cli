@@ -41,6 +41,7 @@ type TasksModel struct {
 	activeErrorChan  <-chan error
 	activePane       TasksPaneType
 	phaseComplete    bool
+	layoutCache      LayoutCache
 }
 
 // NewTasksModel creates a new tasks model
@@ -96,6 +97,7 @@ func (m TasksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TasksAgentErrorMsg:
 		m.chatView.AddError(msg.Err)
 		m.waitingForAI = false
+		m.chatView.ClearLoadingState()
 		m.activeUpdateChan = nil
 		m.activeErrorChan = nil
 		m.err = msg.Err
@@ -149,6 +151,7 @@ func (m TasksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.chatView.FinishStreaming()
 			m.refreshTasksPreviewFromFile()
 			m.waitingForAI = false
+			m.chatView.ClearLoadingState()
 			m.activeUpdateChan = nil
 			m.activeErrorChan = nil
 
@@ -174,6 +177,7 @@ func (m TasksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.chatView.FinishStreaming()
 		m.refreshTasksPreviewFromFile()
 		m.waitingForAI = false
+		m.chatView.ClearLoadingState()
 		m.activeUpdateChan = nil
 		m.activeErrorChan = nil
 		return m, nil
@@ -296,6 +300,49 @@ func (m TasksModel) View() string {
 	)
 }
 
+// ViewContent returns just the content without header/footer for embedding in workflow
+func (m TasksModel) ViewContent() string {
+	if m.err != nil && !m.ready {
+		return tasksErrorStyle.Render(fmt.Sprintf("Error: %v", m.err))
+	}
+
+	if m.quitting {
+		return tasksQuitStyle.Render("Goodbye!")
+	}
+
+	if !m.ready {
+		return "Initializing tasks generation..."
+	}
+
+	// Update layout cache if needed using optimized approach
+	m.updateLayoutCache()
+
+	// Calculate available height using cached heights
+	availableHeight := m.height - m.layoutCache.HeaderHeight - m.layoutCache.FooterHeight
+
+	chatWidth := int(float64(m.width) * 0.6)
+	previewWidth := m.width - chatWidth
+
+	chatPane := m.renderPane(
+		"Chat",
+		m.chatView.View(),
+		chatWidth,
+		availableHeight,
+		m.activePane == TasksChatPane,
+	)
+
+	previewPane := m.renderPane(
+		"Tasks Preview",
+		m.tasksPreview.View(),
+		previewWidth,
+		availableHeight,
+		m.activePane == TasksPreviewPane,
+	)
+
+	// Return just the content (panes) without header/footer
+	return lipgloss.JoinHorizontal(lipgloss.Top, chatPane, previewPane)
+}
+
 func (m *TasksModel) renderHeader() string {
 	title := fmt.Sprintf("Collab Tasks: %s", m.session.FriendlyName)
 	subtitle := fmt.Sprintf("Feature #%03d - %s - Phase: Tasks Generation",
@@ -330,13 +377,8 @@ func (m *TasksModel) renderFooter() string {
 		}
 	}
 
-	var footer string
-	if m.waitingForAI {
-		footer = tasksFooterStyle.Render(strings.Join(shortcuts, " • ") + " | ⏳ Generating tasks...")
-	} else {
-		footer = tasksFooterStyle.Render(strings.Join(shortcuts, " • "))
-	}
-
+	// Render footer without loading state (moved to ChatView)
+	footer := tasksFooterStyle.Render(strings.Join(shortcuts, " • "))
 	return tasksFooterBoxStyle.Width(m.width).Render(footer)
 }
 
@@ -367,6 +409,7 @@ func (m *TasksModel) startTasksGeneration() tea.Cmd {
 	m.session.TasksChatHistory = append(m.session.TasksChatHistory, msg)
 	m.chatView.AddMessage(msg)
 	m.waitingForAI = true
+	m.chatView.SetLoadingState("tasks")
 
 	if m.orchestrator == nil {
 		return func() tea.Msg {
@@ -388,6 +431,7 @@ func (m *TasksModel) sendMessage(input string) tea.Cmd {
 	m.chatView.AddMessage(msg)
 	m.chatView.ClearInput()
 	m.waitingForAI = true
+	m.chatView.SetLoadingState("tasks")
 
 	if m.orchestrator == nil {
 		return func() tea.Msg {
@@ -477,6 +521,22 @@ type tasksAgentUpdate struct {
 type tasksAgentStreamComplete struct{}
 
 // Styles
+// updateLayoutCache updates the cached header and footer heights if needed
+func (m *TasksModel) updateLayoutCache() {
+	if m.layoutCache.Dirty || m.width != m.layoutCache.LastWidth || m.height != m.layoutCache.LastHeight {
+		m.layoutCache.HeaderHeight = lipgloss.Height(m.renderHeader())
+		m.layoutCache.FooterHeight = lipgloss.Height(m.renderFooter())
+		m.layoutCache.LastWidth = m.width
+		m.layoutCache.LastHeight = m.height
+		m.layoutCache.Dirty = false
+	}
+}
+
+// invalidateLayoutCache marks the layout cache as dirty, requiring recalculation
+func (m *TasksModel) invalidateLayoutCache() {
+	m.layoutCache.Dirty = true
+}
+
 var (
 	tasksTitleStyle = lipgloss.NewStyle().
 		Foreground(theme.Primary).

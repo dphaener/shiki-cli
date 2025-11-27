@@ -44,6 +44,7 @@ type ImplementModel struct {
 	totalTasks        int
 	completedTasks    int
 	phaseComplete     bool
+	layoutCache       LayoutCache
 }
 
 // NewImplementModel creates a new implement model
@@ -99,6 +100,7 @@ func (m ImplementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ImplementAgentErrorMsg:
 		m.chatView.AddError(msg.Err)
 		m.waitingForAI = false
+		m.chatView.ClearLoadingState()
 		m.activeUpdateChan = nil
 		m.activeErrorChan = nil
 		m.err = msg.Err
@@ -150,6 +152,7 @@ func (m ImplementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.chatView.FinishStreaming()
 			m.waitingForAI = false
+			m.chatView.ClearLoadingState()
 			m.activeUpdateChan = nil
 			m.activeErrorChan = nil
 			return m, nil
@@ -169,6 +172,7 @@ func (m ImplementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.chatView.FinishStreaming()
 		m.waitingForAI = false
+		m.chatView.ClearLoadingState()
 		m.activeUpdateChan = nil
 		m.activeErrorChan = nil
 		return m, nil
@@ -291,6 +295,49 @@ func (m ImplementModel) View() string {
 	)
 }
 
+// ViewContent returns just the content without header/footer for embedding in workflow
+func (m ImplementModel) ViewContent() string {
+	if m.err != nil && !m.ready {
+		return implementErrorStyle.Render(fmt.Sprintf("Error: %v", m.err))
+	}
+
+	if m.quitting {
+		return implementQuitStyle.Render("Goodbye!")
+	}
+
+	if !m.ready {
+		return "Initializing implementation..."
+	}
+
+	// Update layout cache if needed using optimized approach
+	m.updateLayoutCache()
+
+	// Calculate available height using cached heights
+	availableHeight := m.height - m.layoutCache.HeaderHeight - m.layoutCache.FooterHeight
+
+	chatWidth := int(float64(m.width) * 0.6)
+	previewWidth := m.width - chatWidth
+
+	chatPane := m.renderPane(
+		"Chat",
+		m.chatView.View(),
+		chatWidth,
+		availableHeight,
+		m.activePane == ImplementChatPane,
+	)
+
+	previewPane := m.renderPane(
+		"Implementation Progress",
+		m.implementPreview.View(),
+		previewWidth,
+		availableHeight,
+		m.activePane == ImplementPreviewPane,
+	)
+
+	// Return just the content (panes) without header/footer
+	return lipgloss.JoinHorizontal(lipgloss.Top, chatPane, previewPane)
+}
+
 func (m *ImplementModel) renderHeader() string {
 	title := fmt.Sprintf("Collab Implement: %s", m.session.FriendlyName)
 
@@ -332,13 +379,8 @@ func (m *ImplementModel) renderFooter() string {
 		}
 	}
 
-	var footer string
-	if m.waitingForAI {
-		footer = implementFooterStyle.Render(strings.Join(shortcuts, " • ") + " | ⏳ Implementing...")
-	} else {
-		footer = implementFooterStyle.Render(strings.Join(shortcuts, " • "))
-	}
-
+	// Render footer without loading state (moved to ChatView)
+	footer := implementFooterStyle.Render(strings.Join(shortcuts, " • "))
 	return implementFooterBoxStyle.Width(m.width).Render(footer)
 }
 
@@ -375,6 +417,7 @@ func (m *ImplementModel) startImplementation() tea.Cmd {
 	m.session.ImplChatHistory = append(m.session.ImplChatHistory, msg)
 	m.chatView.AddMessage(msg)
 	m.waitingForAI = true
+	m.chatView.SetLoadingState("implement")
 
 	if m.orchestrator == nil {
 		return func() tea.Msg {
@@ -396,6 +439,7 @@ func (m *ImplementModel) sendMessage(input string) tea.Cmd {
 	m.chatView.AddMessage(msg)
 	m.chatView.ClearInput()
 	m.waitingForAI = true
+	m.chatView.SetLoadingState("implement")
 
 	if m.orchestrator == nil {
 		return func() tea.Msg {
@@ -463,6 +507,22 @@ type implementAgentUpdate struct {
 type implementAgentStreamComplete struct{}
 
 // Styles
+// updateLayoutCache updates the cached header and footer heights if needed
+func (m *ImplementModel) updateLayoutCache() {
+	if m.layoutCache.Dirty || m.width != m.layoutCache.LastWidth || m.height != m.layoutCache.LastHeight {
+		m.layoutCache.HeaderHeight = lipgloss.Height(m.renderHeader())
+		m.layoutCache.FooterHeight = lipgloss.Height(m.renderFooter())
+		m.layoutCache.LastWidth = m.width
+		m.layoutCache.LastHeight = m.height
+		m.layoutCache.Dirty = false
+	}
+}
+
+// invalidateLayoutCache marks the layout cache as dirty, requiring recalculation
+func (m *ImplementModel) invalidateLayoutCache() {
+	m.layoutCache.Dirty = true
+}
+
 var (
 	implementTitleStyle = lipgloss.NewStyle().
 		Foreground(theme.Primary).

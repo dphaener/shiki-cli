@@ -15,6 +15,7 @@ import (
 	"github.com/darinhaener/collab/pkg/types"
 )
 
+
 // PaneType represents which pane is currently active
 type PaneType int
 
@@ -40,6 +41,7 @@ type SpecifyModel struct {
 	activeUpdateChan  <-chan orchestrator.MessageUpdate
 	activeErrorChan   <-chan error
 	activePane        PaneType // Which pane is currently active
+	layoutCache       LayoutCache
 }
 
 // NewSpecifyModel creates a new specify model
@@ -115,6 +117,7 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Show error inline in chat instead of replacing entire view
 		m.chatView.AddError(msg.Err)
 		m.waitingForAI = false
+		m.chatView.ClearLoadingState()
 		m.activeUpdateChan = nil
 		m.activeErrorChan = nil
 		// Also store for potential full-screen error display
@@ -131,6 +134,7 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.session.ChatHistory = append(m.session.ChatHistory, assistantMsg)
 		m.chatView.AddMessage(assistantMsg)
 		m.waitingForAI = false
+		m.chatView.ClearLoadingState()
 		return m, nil
 
 	case AgentStreamMsg:
@@ -219,6 +223,7 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Refresh preview from file to show actual spec content
 			m.refreshSpecPreviewFromFile()
 			m.waitingForAI = false
+			m.chatView.ClearLoadingState()
 			m.activeUpdateChan = nil
 			m.activeErrorChan = nil
 			return m, nil
@@ -247,6 +252,7 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Refresh preview from file to show actual spec content
 		m.refreshSpecPreviewFromFile()
 		m.waitingForAI = false
+		m.chatView.ClearLoadingState()
 		m.activeUpdateChan = nil
 		m.activeErrorChan = nil
 		return m, nil
@@ -260,12 +266,14 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Let lipgloss calculate header/footer height dynamically
-		headerHeight := lipgloss.Height(m.renderHeader())
-		footerHeight := lipgloss.Height(m.renderFooter())
+		// Invalidate layout cache since window size changed
+		m.invalidateLayoutCache()
 
-		// Available height for content
-		availableHeight := msg.Height - headerHeight - footerHeight
+		// Update layout cache with new dimensions
+		m.updateLayoutCache()
+
+		// Available height for content using cached heights
+		availableHeight := msg.Height - m.layoutCache.HeaderHeight - m.layoutCache.FooterHeight
 		if availableHeight < 5 {
 			availableHeight = 5 // Minimum
 		}
@@ -358,14 +366,17 @@ func (m SpecifyModel) View() string {
 		return "Initializing..."
 	}
 
-	// Render components
+	// Render components and cache heights
 	header := m.renderHeader()
 	footer := m.renderFooter()
+	m.layoutCache.HeaderHeight = lipgloss.Height(header)
+	m.layoutCache.FooterHeight = lipgloss.Height(footer)
+	m.layoutCache.LastWidth = m.width
+	m.layoutCache.LastHeight = m.height
+	m.layoutCache.Dirty = false
 
-	// Calculate available height dynamically
-	headerHeight := lipgloss.Height(header)
-	footerHeight := lipgloss.Height(footer)
-	availableHeight := m.height - headerHeight - footerHeight
+	// Calculate available height using cached heights
+	availableHeight := m.height - m.layoutCache.HeaderHeight - m.layoutCache.FooterHeight
 
 	// Split panes: 60% chat, 40% preview
 	chatWidth := int(float64(m.width) * 0.6)
@@ -398,6 +409,51 @@ func (m SpecifyModel) View() string {
 		content,
 		footer,
 	)
+}
+
+// ViewContent returns just the content without header/footer for embedding in workflow
+func (m SpecifyModel) ViewContent() string {
+	if m.err != nil && !m.ready {
+		return errorStyle.Render(fmt.Sprintf("Error: %v", m.err))
+	}
+
+	if m.quitting {
+		return quitMessageStyle.Render("Goodbye!")
+	}
+
+	if !m.ready {
+		return "Initializing..."
+	}
+
+	// Update layout cache if needed using optimized approach
+	m.updateLayoutCache()
+
+	// Calculate available height using cached heights
+	availableHeight := m.height - m.layoutCache.HeaderHeight - m.layoutCache.FooterHeight
+
+	// Split panes: 60% chat, 40% preview
+	chatWidth := int(float64(m.width) * 0.6)
+	previewWidth := m.width - chatWidth
+
+	// Render panes with proper sizing
+	chatPane := m.renderPane(
+		"Chat",
+		m.chatView.View(),
+		chatWidth,
+		availableHeight,
+		m.activePane == ChatPane, // Active if ChatPane is selected
+	)
+
+	previewPane := m.renderPane(
+		"Specification Preview",
+		m.specPreview.View(),
+		previewWidth,
+		availableHeight,
+		m.activePane == PreviewPane, // Active if PreviewPane is selected
+	)
+
+	// Return just the content (panes) without header/footer
+	return lipgloss.JoinHorizontal(lipgloss.Top, chatPane, previewPane)
 }
 
 // renderHeader renders the TUI header
@@ -437,13 +493,8 @@ func (m *SpecifyModel) renderFooter() string {
 		}
 	}
 
-	var footer string
-	if m.waitingForAI {
-		footer = footerStyle.Render(strings.Join(shortcuts, " • ") + " | ⏳ Waiting for AI...")
-	} else {
-		footer = footerStyle.Render(strings.Join(shortcuts, " • "))
-	}
-
+	// Render footer without loading state (moved to ChatView)
+	footer := footerStyle.Render(strings.Join(shortcuts, " • "))
 	return footerBoxStyle.Width(m.width).Render(footer)
 }
 
@@ -595,6 +646,7 @@ func (m *SpecifyModel) autoStartDiscovery() tea.Cmd {
 	m.session.ChatHistory = append(m.session.ChatHistory, msg)
 	m.chatView.AddMessage(msg)
 	m.waitingForAI = true
+	m.chatView.SetLoadingState("specify")
 
 	// Send to AI agent
 	if m.orchestrator == nil {
@@ -611,6 +663,7 @@ func (m *SpecifyModel) autoStartDiscovery() tea.Cmd {
 // letAIInitiate triggers the AI to start the conversation when no description was provided
 func (m *SpecifyModel) letAIInitiate() tea.Cmd {
 	m.waitingForAI = true
+	m.chatView.SetLoadingState("specify")
 
 	// Send to AI agent with a prompt that triggers the AI's greeting
 	if m.orchestrator == nil {
@@ -637,6 +690,7 @@ func (m *SpecifyModel) sendMessage(input string) tea.Cmd {
 	m.chatView.AddMessage(msg)
 	m.chatView.ClearInput()
 	m.waitingForAI = true
+	m.chatView.SetLoadingState("specify")
 
 	// Send to AI agent
 	if m.orchestrator == nil {
@@ -722,3 +776,19 @@ var (
 				Bold(true).
 				Padding(1)
 )
+
+// updateLayoutCache updates the cached header and footer heights if needed
+func (m *SpecifyModel) updateLayoutCache() {
+	if m.layoutCache.Dirty || m.width != m.layoutCache.LastWidth || m.height != m.layoutCache.LastHeight {
+		m.layoutCache.HeaderHeight = lipgloss.Height(m.renderHeader())
+		m.layoutCache.FooterHeight = lipgloss.Height(m.renderFooter())
+		m.layoutCache.LastWidth = m.width
+		m.layoutCache.LastHeight = m.height
+		m.layoutCache.Dirty = false
+	}
+}
+
+// invalidateLayoutCache marks the layout cache as dirty, requiring recalculation
+func (m *SpecifyModel) invalidateLayoutCache() {
+	m.layoutCache.Dirty = true
+}

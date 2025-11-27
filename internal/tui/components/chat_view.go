@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -33,8 +34,12 @@ type ChatView struct {
 	lastMessageCount int
 	// contentDirty tracks whether messages have changed since last render.
 	// Safe to use without synchronization due to Bubble Tea's single-threaded model.
-	contentDirty bool
-	isStreaming  bool // Track if we're currently receiving a streaming message
+	contentDirty        bool
+	isStreaming         bool           // Track if we're currently receiving a streaming message
+	showingLoadingState bool           // Track if we're showing loading state
+	loadingMessage      string         // Message to display while loading
+	spinner             spinner.Model  // Animated spinner for loading state
+	currentPhase        string         // Current workflow phase for context
 }
 
 // NewChatView creates a new chat view
@@ -51,6 +56,11 @@ func NewChatView(width, height int) ChatView {
 	vp := viewport.New(width-4, height-4)
 	vp.YPosition = 0
 
+	// Initialize spinner with MiniDot style
+	s := spinner.New()
+	s.Spinner = spinner.MiniDot
+	s.Style = lipgloss.NewStyle().Foreground(theme.Primary)
+
 	return ChatView{
 		viewport: vp,
 		textarea: ta,
@@ -58,25 +68,30 @@ func NewChatView(width, height int) ChatView {
 		width:    width,
 		height:   height,
 		ready:    false,
+		spinner:  s,
 	}
 }
 
 // Init implements tea.Model
 func (c ChatView) Init() tea.Cmd {
-	return textarea.Blink
+	return tea.Batch(textarea.Blink, c.spinner.Tick)
 }
 
 // Update implements tea.Model
 func (c ChatView) Update(msg tea.Msg) (ChatView, tea.Cmd) {
 	var (
-		vpCmd tea.Cmd
-		taCmd tea.Cmd
+		vpCmd      tea.Cmd
+		taCmd      tea.Cmd
+		spinnerCmd tea.Cmd
 	)
 
 	c.viewport, vpCmd = c.viewport.Update(msg)
 	c.textarea, taCmd = c.textarea.Update(msg)
 
-	return c, tea.Batch(vpCmd, taCmd)
+	// Always update spinner to keep tick chain alive
+	c.spinner, spinnerCmd = c.spinner.Update(msg)
+
+	return c, tea.Batch(vpCmd, taCmd, spinnerCmd)
 }
 
 // View implements tea.Model
@@ -85,10 +100,14 @@ func (c ChatView) View() string {
 		return "Initializing chat..."
 	}
 
-	// Only update viewport content if messages have changed
-	if c.contentDirty {
+	// Only update viewport content if messages have changed or loading state is active
+	if c.contentDirty || c.showingLoadingState {
 		chatContent := c.renderMessages()
 		c.viewport.SetContent(chatContent)
+		// Scroll to bottom when loading so user can see the spinner
+		if c.showingLoadingState {
+			c.viewport.GotoBottom()
+		}
 		c.contentDirty = false
 	}
 
@@ -195,6 +214,11 @@ func (c *ChatView) UpdateLastMessage(content string) {
 
 // AddOrUpdateAssistantMessage adds a new assistant message or updates the last one if it's streaming
 func (c *ChatView) AddOrUpdateAssistantMessage(content string, streaming bool) {
+	// Receiving assistant content means we're no longer waiting
+	if c.showingLoadingState {
+		c.ClearLoadingState()
+	}
+
 	now := time.Now()
 
 	if streaming {
@@ -274,13 +298,23 @@ func (c *ChatView) Blur() {
 
 // renderMessages renders all chat messages
 func (c *ChatView) renderMessages() string {
-	if len(c.messages) == 0 {
+	if len(c.messages) == 0 && !c.showingLoadingState {
 		return chatEmptyStyle.Render("No messages yet. Start the conversation!")
 	}
 
 	var rendered []string
 	for _, msg := range c.messages {
 		rendered = append(rendered, c.renderMessage(msg))
+	}
+
+	// Add loading state message if active
+	if c.showingLoadingState {
+		loadingStyle := lipgloss.NewStyle().
+			Foreground(theme.TextMuted).
+			Italic(true).
+			Padding(1, 2)
+		loadingMsg := loadingStyle.Render(c.spinner.View() + " " + c.loadingMessage)
+		rendered = append(rendered, loadingMsg)
 	}
 
 	return strings.Join(rendered, "\n\n")
@@ -427,4 +461,39 @@ I'll help you create a comprehensive specification for your feature.`
 		Content:   welcome,
 		Timestamp: time.Now(),
 	})
+}
+
+// SetLoadingState displays a contextual loading message in the chat area.
+// The phase parameter should be one of: "specify", "plan", "tasks", "implement".
+func (c *ChatView) SetLoadingState(phase string) {
+	c.showingLoadingState = true
+	c.currentPhase = phase
+
+	// Get last user message for context
+	lastUserMsg := c.getLastUserMessage()
+
+	// Generate contextual loading message
+	c.loadingMessage = GenerateLoadingMessage(lastUserMsg, phase)
+}
+
+// getLastUserMessage returns the content of the most recent user message.
+func (c *ChatView) getLastUserMessage() string {
+	for i := len(c.messages) - 1; i >= 0; i-- {
+		if c.messages[i].Role == "user" {
+			return c.messages[i].Content
+		}
+	}
+	return ""
+}
+
+// ClearLoadingState removes the loading message from the chat area
+func (c *ChatView) ClearLoadingState() {
+	c.showingLoadingState = false
+	c.loadingMessage = ""
+	c.contentDirty = true // Trigger re-render to remove loading message
+}
+
+// IsShowingLoading returns whether the chat is currently showing a loading state
+func (c *ChatView) IsShowingLoading() bool {
+	return c.showingLoadingState
 }
