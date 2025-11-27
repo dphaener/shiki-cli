@@ -53,6 +53,7 @@ type TasksModel struct {
 	// Interrupt state tracking for enhanced keyboard handling
 	interruptRequested bool      // Track if user requested interruption
 	lastInterruptTime  time.Time // Prevent accidental double-interrupts
+	lastEscTime        time.Time // Track last ESC press for double-ESC clear
 }
 
 // NewTasksModel creates a new tasks model
@@ -219,8 +220,8 @@ func (m TasksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c":
+		switch msg.Type {
+		case tea.KeyCtrlC:
 			// Ctrl+C always quits
 			m.quitting = true
 			if m.orchestrator != nil {
@@ -228,29 +229,46 @@ func (m TasksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 
-		case "esc":
-			// ESC interrupts agent if waiting, otherwise does nothing
+		case tea.KeyEsc:
+			now := time.Now()
 			if m.waitingForAI && m.orchestrator != nil {
-				now := time.Now()
-				// Call interrupt and set flag
-				_ = m.orchestrator.Interrupt()
+				// ESC interrupts agent if waiting
 				m.interruptRequested = true
 				m.lastInterruptTime = now
-				// Clean up waiting state
 				m.waitingForAI = false
 				m.chatView.ClearLoadingState()
 				m.activeUpdateChan = nil
 				m.activeErrorChan = nil
-				// Add visual feedback
+
+				// Add immediate visual feedback
 				m.chatView.AddMessage(types.ChatMessage{
 					Role:      "assistant",
-					Content:   "Interrupted by user",
+					Content:   "Interrupting...",
 					Timestamp: now,
 				})
-			}
-			return m, nil
 
-		case "tab":
+				// Re-focus the chat input to ensure it remains responsive
+				if m.activePane == TasksChatPane {
+					cmd := m.chatView.Focus()
+					cmds = append(cmds, cmd)
+				}
+
+				// Call interrupt asynchronously to avoid blocking UI
+				go func() {
+					_ = m.orchestrator.Interrupt()
+				}()
+			} else if m.activePane == TasksChatPane {
+				// Double-ESC clears input when not waiting for AI
+				if now.Sub(m.lastEscTime) < tasksDoubleEscapeTimeout {
+					m.chatView.ClearInput()
+					m.lastEscTime = time.Time{} // Reset to prevent triple-ESC
+				} else {
+					m.lastEscTime = now
+				}
+			}
+			return m, tea.Batch(cmds...)
+
+		case tea.KeyTab:
 			if m.activePane == TasksChatPane {
 				m.activePane = TasksPreviewPane
 				m.chatView.Blur()
@@ -261,17 +279,13 @@ func (m TasksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(cmds...)
 
-		case tasksMessageClearShortcut, "ctrl+shift+u":
-			// Clear message input when chat pane is active (support both ctrl+u and ctrl+shift+u)
-			if m.activePane == TasksChatPane {
-				m.chatView.ClearInput()
-			}
-			return m, nil
-
-		case "enter":
+		case tea.KeyEnter:
+			// Handle Enter key for sending messages
 			if m.activePane == TasksChatPane {
 				input := m.chatView.GetInput()
 				if input != "" {
+					// Only send message if there's actual content
+					// Multi-line input is handled by the textarea itself when Shift+Enter is pressed
 					return m, m.sendMessage(input)
 				}
 			}
@@ -407,7 +421,7 @@ func (m *TasksModel) renderFooter() string {
 		shortcuts = []string{
 			"Enter: Send",
 			"Shift+Enter: New Line",
-			"Ctrl+U: Clear",
+			"Esc×2: Clear",
 			"Tab: Switch to Preview",
 			"↑/↓: Scroll",
 			"Esc: Interrupt",

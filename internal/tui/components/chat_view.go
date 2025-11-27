@@ -49,9 +49,11 @@ func NewChatView(width, height int) ChatView {
 	ta.Prompt = "> "
 	ta.CharLimit = 10000 // Increased for multi-line support
 	ta.SetWidth(width - 4)
-	ta.SetHeight(1)
+	ta.SetHeight(maxInputHeight) // Always show 3 lines for consistent UI
 	ta.ShowLineNumbers = false
-	ta.KeyMap.InsertNewline.SetEnabled(true) // Enable Shift+Enter for multi-line input
+	ta.KeyMap.InsertNewline.SetEnabled(true)
+	ta.KeyMap.InsertNewline.SetKeys("ctrl+j") // Bind to ctrl+j (what Shift+Enter sends via Ghostty keybind)
+	ta.KeyMap.DeleteBeforeCursor.SetEnabled(false) // Disable so Ctrl+U can be handled by model for full clear
 
 	vp := viewport.New(width-4, height-4)
 	vp.YPosition = 0
@@ -503,20 +505,9 @@ func (c *ChatView) IsShowingLoading() bool {
 
 // adjustTextareaHeight dynamically adjusts the textarea height based on content
 func (c *ChatView) adjustTextareaHeight() {
-	content := c.textarea.Value()
-	lines := strings.Count(content, "\n") + 1
-
-	// Minimum height of 1, maximum height of maxInputHeight
-	newHeight := lines
-	if newHeight < 1 {
-		newHeight = 1
-	}
-	if newHeight > maxInputHeight {
-		newHeight = maxInputHeight
-	}
-
-	// Only update if height needs to change
-	if c.textarea.Height() != newHeight {
-		c.textarea.SetHeight(newHeight)
+	// Always use maxInputHeight to show consistent 3-line input area
+	// The textarea component shows the prompt (>) on each line
+	if c.textarea.Height() != maxInputHeight {
+		c.textarea.SetHeight(maxInputHeight)
 	}
 }

@@ -340,7 +340,8 @@ func (m WorkflowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Global shortcuts
 		switch msg.String() {
-		case "ctrl+c", "esc":
+		case "ctrl+c":
+			// Only Ctrl+C quits the application
 			// In approval phase, don't quit immediately - prompt
 			if types.IsApprovalPhase(m.session.CurrentPhase) {
 				// Save state before quitting
@@ -361,6 +362,9 @@ func (m WorkflowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.activePhaseModel, cmd = m.activePhaseModel.Update(msg)
 		cmds = append(cmds, cmd)
+
+		// Sync waiting state with the active model
+		m.syncWaitingState()
 
 		// Check for phase completion signals from embedded models
 		if m.checkPhaseCompletion() {
@@ -593,6 +597,20 @@ type workflowPhaseChangedMsg struct {
 	from       types.WorkflowPhase
 	to         types.WorkflowPhase
 	saveCheck  bool // whether to save a checkpoint for the 'from' phase
+}
+
+// syncWaitingState synchronizes the workflow's waitingForAI state with the active phase model
+func (m *WorkflowModel) syncWaitingState() {
+	switch model := m.activePhaseModel.(type) {
+	case *SpecifyModel:
+		m.waitingForAI = model.waitingForAI
+	case *PlanModel:
+		m.waitingForAI = model.waitingForAI
+	case *TasksModel:
+		m.waitingForAI = model.waitingForAI
+	case *ImplementModel:
+		m.waitingForAI = model.waitingForAI
+	}
 }
 
 // Styles for workflow mode

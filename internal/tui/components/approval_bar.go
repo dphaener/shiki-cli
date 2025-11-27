@@ -75,17 +75,20 @@ func (a ApprovalBar) getShortcuts() []shortcut {
 			shortcuts = append(shortcuts, shortcut{key: "B", action: "Go Back"})
 		}
 		shortcuts = append(shortcuts, shortcut{key: "Tab", action: "Switch Pane"})
-		shortcuts = append(shortcuts, shortcut{key: "Esc", action: "Quit"})
+		shortcuts = append(shortcuts, shortcut{key: "Ctrl+C", action: "Quit"})
 		return shortcuts
 	}
 
 	// Working phase shortcuts
 	return []shortcut{
 		{key: "Enter", action: "Send"},
+		{key: "Shift+Enter", action: "New Line"},
+		{key: "Esc×2", action: "Clear"},
 		{key: "Ctrl+D", action: "Done"},
 		{key: "Tab", action: "Switch Pane"},
 		{key: "↑/↓", action: "Scroll"},
-		{key: "Esc", action: "Quit"},
+		{key: "Esc", action: "Interrupt"},
+		{key: "Ctrl+C", action: "Quit"},
 	}
 }
 
