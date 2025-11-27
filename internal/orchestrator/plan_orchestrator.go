@@ -466,6 +466,22 @@ func (o *PlanOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate
 	return updateChan, errorChan
 }
 
+// Interrupt gracefully interrupts the current agent operation without stopping the orchestrator
+func (o *PlanOrchestrator) Interrupt() error {
+	if o.agent != nil {
+		client := o.agent.GetClient()
+		if client != nil {
+			// Create a temporary debug logger for interrupt operation
+			logger := newDebugLogger()
+			defer logger.close()
+
+			logger.log("User requested interrupt")
+			interruptClient(client, logger)
+		}
+	}
+	return nil
+}
+
 // Stop gracefully shuts down the orchestrator
 func (o *PlanOrchestrator) Stop() error {
 	o.cancel()

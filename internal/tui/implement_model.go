@@ -23,6 +23,14 @@ const (
 	ImplementPreviewPane
 )
 
+// Keyboard interaction constants
+const (
+	// doubleEscapeTimeout is the time window for detecting double ESC key presses
+	implementDoubleEscapeTimeout = 2 * time.Second
+	// messageClearShortcut defines the keyboard combination for clearing messages
+	implementMessageClearShortcut = "ctrl+u"
+)
+
 // ImplementModel manages the implementation TUI
 type ImplementModel struct {
 	session           *types.WorkflowSession
@@ -45,6 +53,9 @@ type ImplementModel struct {
 	completedTasks    int
 	phaseComplete     bool
 	layoutCache       LayoutCache
+	// Interrupt state tracking for enhanced keyboard handling
+	interruptRequested bool      // Track if user requested interruption
+	lastInterruptTime  time.Time // Prevent accidental double-interrupts
 }
 
 // NewImplementModel creates a new implement model
@@ -204,12 +215,35 @@ func (m ImplementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "esc":
+		case "ctrl+c":
+			// Ctrl+C always quits
 			m.quitting = true
 			if m.orchestrator != nil {
 				_ = m.orchestrator.Stop()
 			}
 			return m, tea.Quit
+
+		case "esc":
+			// ESC interrupts agent if waiting, otherwise does nothing
+			if m.waitingForAI && m.orchestrator != nil {
+				now := time.Now()
+				// Call interrupt and set flag
+				_ = m.orchestrator.Interrupt()
+				m.interruptRequested = true
+				m.lastInterruptTime = now
+				// Clean up waiting state
+				m.waitingForAI = false
+				m.chatView.ClearLoadingState()
+				m.activeUpdateChan = nil
+				m.activeErrorChan = nil
+				// Add visual feedback
+				m.chatView.AddMessage(types.ChatMessage{
+					Role:      "assistant",
+					Content:   "Interrupted by user",
+					Timestamp: now,
+				})
+			}
+			return m, nil
 
 		case "tab":
 			if m.activePane == ImplementChatPane {
@@ -221,6 +255,13 @@ func (m ImplementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 			return m, tea.Batch(cmds...)
+
+		case implementMessageClearShortcut, "ctrl+shift+u":
+			// Clear message input when chat pane is active (support both ctrl+u and ctrl+shift+u)
+			if m.activePane == ImplementChatPane {
+				m.chatView.ClearInput()
+			}
+			return m, nil
 
 		case "enter":
 			if m.activePane == ImplementChatPane {
@@ -367,15 +408,18 @@ func (m *ImplementModel) renderFooter() string {
 	if m.activePane == ImplementChatPane {
 		shortcuts = []string{
 			"Enter: Send",
+			"Shift+Enter: New Line",
+			"Ctrl+U: Clear",
 			"Tab: Switch to Preview",
 			"↑/↓: Scroll",
-			"Esc: Quit",
+			"Esc: Interrupt",
+			"Ctrl+C: Quit",
 		}
 	} else {
 		shortcuts = []string{
 			"Tab: Switch to Chat",
 			"↑/↓: Scroll",
-			"Esc: Quit",
+			"Ctrl+C: Quit",
 		}
 	}
 

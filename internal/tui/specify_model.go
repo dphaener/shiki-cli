@@ -24,6 +24,14 @@ const (
 	PreviewPane
 )
 
+// Keyboard interaction constants
+const (
+	// doubleEscapeTimeout is the time window for detecting double ESC key presses
+	doubleEscapeTimeout = 2 * time.Second
+	// messageClearShortcut defines the keyboard combination for clearing messages
+	messageClearShortcut = "ctrl+u"
+)
+
 // SpecifyModel manages the specify mode TUI
 type SpecifyModel struct {
 	session           *types.SpecifySession
@@ -42,6 +50,9 @@ type SpecifyModel struct {
 	activeErrorChan   <-chan error
 	activePane        PaneType // Which pane is currently active
 	layoutCache       LayoutCache
+	// Interrupt state tracking for enhanced keyboard handling
+	interruptRequested bool      // Track if user requested interruption
+	lastInterruptTime  time.Time // Prevent accidental double-interrupts
 }
 
 // NewSpecifyModel creates a new specify model
@@ -301,13 +312,36 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "esc":
+		case "ctrl+c":
+			// Ctrl+C always quits
 			m.quitting = true
 			// Cleanup orchestrator
 			if m.orchestrator != nil {
 				_ = m.orchestrator.Stop()
 			}
 			return m, tea.Quit
+
+		case "esc":
+			// ESC interrupts agent if waiting, otherwise does nothing
+			if m.waitingForAI && m.orchestrator != nil {
+				now := time.Now()
+				// Call interrupt and set flag
+				_ = m.orchestrator.Interrupt()
+				m.interruptRequested = true
+				m.lastInterruptTime = now
+				// Clean up waiting state
+				m.waitingForAI = false
+				m.chatView.ClearLoadingState()
+				m.activeUpdateChan = nil
+				m.activeErrorChan = nil
+				// Add visual feedback
+				m.chatView.AddMessage(types.ChatMessage{
+					Role:      "assistant",
+					Content:   "Interrupted by user",
+					Timestamp: now,
+				})
+			}
+			return m, nil
 
 		case "tab":
 			// Switch between panes
@@ -323,8 +357,15 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(cmds...)
 
+		case messageClearShortcut, "ctrl+shift+u":
+			// Clear message input when chat pane is active (support both ctrl+u and ctrl+shift+u)
+			if m.activePane == ChatPane {
+				m.chatView.ClearInput()
+			}
+			return m, nil
+
 		case "enter":
-			// Only send message if chat pane is active
+			// Only send message if chat pane is active and it's not Shift+Enter
 			if m.activePane == ChatPane {
 				input := m.chatView.GetInput()
 				if input != "" {
@@ -481,15 +522,18 @@ func (m *SpecifyModel) renderFooter() string {
 	if m.activePane == ChatPane {
 		shortcuts = []string{
 			"Enter: Send",
+			"Shift+Enter: New Line",
+			"Ctrl+U: Clear",
 			"Tab: Switch to Preview",
 			"↑/↓/PgUp/PgDn: Scroll",
-			"Ctrl+C/Esc: Quit",
+			"Esc: Interrupt",
+			"Ctrl+C: Quit",
 		}
 	} else {
 		shortcuts = []string{
 			"Tab: Switch to Chat",
 			"↑/↓/PgUp/PgDn: Scroll",
-			"Ctrl+C/Esc: Quit",
+			"Ctrl+C: Quit",
 		}
 	}
 

@@ -673,6 +673,21 @@ func capitalizeFirst(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
+// Interrupt gracefully interrupts the current agent operation without stopping the orchestrator
+func (o *SpecifyOrchestrator) Interrupt() error {
+	if o.agent != nil {
+		client := o.agent.GetClient()
+		if client != nil {
+			// Use the existing interruptClient helper with timeout
+			if o.logger != nil {
+				o.logger.log("User requested interrupt")
+			}
+			interruptClient(client, o.logger)
+		}
+	}
+	return nil
+}
+
 // Stop gracefully shuts down the orchestrator
 func (o *SpecifyOrchestrator) Stop() error {
 	o.cancel()

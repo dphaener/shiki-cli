@@ -24,6 +24,14 @@ const (
 	PlanPreviewPane
 )
 
+// Keyboard interaction constants
+const (
+	// doubleEscapeTimeout is the time window for detecting double ESC key presses
+	planDoubleEscapeTimeout = 2 * time.Second
+	// messageClearShortcut defines the keyboard combination for clearing messages
+	planMessageClearShortcut = "ctrl+u"
+)
+
 // PlanModel manages the plan mode TUI
 type PlanModel struct {
 	session          *types.PlanSession
@@ -42,6 +50,9 @@ type PlanModel struct {
 	activeErrorChan  <-chan error
 	activePane       PlanPaneType // Which pane is currently active
 	layoutCache      LayoutCache
+	// Interrupt state tracking for enhanced keyboard handling
+	interruptRequested bool      // Track if user requested interruption
+	lastInterruptTime  time.Time // Prevent accidental double-interrupts
 }
 
 // NewPlanModel creates a new plan model
@@ -266,13 +277,36 @@ func (m PlanModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "esc":
+		case "ctrl+c":
+			// Ctrl+C always quits
 			m.quitting = true
 			// Cleanup orchestrator
 			if m.orchestrator != nil {
 				_ = m.orchestrator.Stop()
 			}
 			return m, tea.Quit
+
+		case "esc":
+			// ESC interrupts agent if waiting, otherwise does nothing
+			if m.waitingForAI && m.orchestrator != nil {
+				now := time.Now()
+				// Call interrupt and set flag
+				_ = m.orchestrator.Interrupt()
+				m.interruptRequested = true
+				m.lastInterruptTime = now
+				// Clean up waiting state
+				m.waitingForAI = false
+				m.chatView.ClearLoadingState()
+				m.activeUpdateChan = nil
+				m.activeErrorChan = nil
+				// Add visual feedback
+				m.chatView.AddMessage(types.ChatMessage{
+					Role:      "assistant",
+					Content:   "Interrupted by user",
+					Timestamp: now,
+				})
+			}
+			return m, nil
 
 		case "tab":
 			// Switch between panes
@@ -287,6 +321,13 @@ func (m PlanModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 			return m, tea.Batch(cmds...)
+
+		case planMessageClearShortcut, "ctrl+shift+u":
+			// Clear message input when chat pane is active (support both ctrl+u and ctrl+shift+u)
+			if m.activePane == PlanChatPane {
+				m.chatView.ClearInput()
+			}
+			return m, nil
 
 		case "enter":
 			// Only send message if chat pane is active
@@ -446,15 +487,18 @@ func (m *PlanModel) renderFooter() string {
 	if m.activePane == PlanChatPane {
 		shortcuts = []string{
 			"Enter: Send",
+			"Shift+Enter: New Line",
+			"Ctrl+U: Clear",
 			"Tab: Switch to Preview",
 			"↑/↓/PgUp/PgDn: Scroll",
-			"Ctrl+C/Esc: Quit",
+			"Esc: Interrupt",
+			"Ctrl+C: Quit",
 		}
 	} else {
 		shortcuts = []string{
 			"Tab: Switch to Chat",
 			"↑/↓/PgUp/PgDn: Scroll",
-			"Ctrl+C/Esc: Quit",
+			"Ctrl+C: Quit",
 		}
 	}
 

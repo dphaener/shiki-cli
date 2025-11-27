@@ -23,6 +23,14 @@ const (
 	TasksPreviewPane
 )
 
+// Keyboard interaction constants
+const (
+	// doubleEscapeTimeout is the time window for detecting double ESC key presses
+	tasksDoubleEscapeTimeout = 2 * time.Second
+	// messageClearShortcut defines the keyboard combination for clearing messages
+	tasksMessageClearShortcut = "ctrl+u"
+)
+
 // TasksModel manages the tasks generation TUI
 type TasksModel struct {
 	session          *types.WorkflowSession
@@ -42,6 +50,9 @@ type TasksModel struct {
 	activePane       TasksPaneType
 	phaseComplete    bool
 	layoutCache      LayoutCache
+	// Interrupt state tracking for enhanced keyboard handling
+	interruptRequested bool      // Track if user requested interruption
+	lastInterruptTime  time.Time // Prevent accidental double-interrupts
 }
 
 // NewTasksModel creates a new tasks model
@@ -209,12 +220,35 @@ func (m TasksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "esc":
+		case "ctrl+c":
+			// Ctrl+C always quits
 			m.quitting = true
 			if m.orchestrator != nil {
 				_ = m.orchestrator.Stop()
 			}
 			return m, tea.Quit
+
+		case "esc":
+			// ESC interrupts agent if waiting, otherwise does nothing
+			if m.waitingForAI && m.orchestrator != nil {
+				now := time.Now()
+				// Call interrupt and set flag
+				_ = m.orchestrator.Interrupt()
+				m.interruptRequested = true
+				m.lastInterruptTime = now
+				// Clean up waiting state
+				m.waitingForAI = false
+				m.chatView.ClearLoadingState()
+				m.activeUpdateChan = nil
+				m.activeErrorChan = nil
+				// Add visual feedback
+				m.chatView.AddMessage(types.ChatMessage{
+					Role:      "assistant",
+					Content:   "Interrupted by user",
+					Timestamp: now,
+				})
+			}
+			return m, nil
 
 		case "tab":
 			if m.activePane == TasksChatPane {
@@ -226,6 +260,13 @@ func (m TasksModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 			return m, tea.Batch(cmds...)
+
+		case tasksMessageClearShortcut, "ctrl+shift+u":
+			// Clear message input when chat pane is active (support both ctrl+u and ctrl+shift+u)
+			if m.activePane == TasksChatPane {
+				m.chatView.ClearInput()
+			}
+			return m, nil
 
 		case "enter":
 			if m.activePane == TasksChatPane {
@@ -365,15 +406,18 @@ func (m *TasksModel) renderFooter() string {
 	if m.activePane == TasksChatPane {
 		shortcuts = []string{
 			"Enter: Send",
+			"Shift+Enter: New Line",
+			"Ctrl+U: Clear",
 			"Tab: Switch to Preview",
 			"↑/↓: Scroll",
-			"Esc: Quit",
+			"Esc: Interrupt",
+			"Ctrl+C: Quit",
 		}
 	} else {
 		shortcuts = []string{
 			"Tab: Switch to Chat",
 			"↑/↓: Scroll",
-			"Esc: Quit",
+			"Ctrl+C: Quit",
 		}
 	}
 

@@ -47,11 +47,11 @@ func NewChatView(width, height int) ChatView {
 	ta := textarea.New()
 	ta.Placeholder = "Type your message here..."
 	ta.Prompt = "> "
-	ta.CharLimit = 2000
+	ta.CharLimit = 10000 // Increased for multi-line support
 	ta.SetWidth(width - 4)
 	ta.SetHeight(1)
 	ta.ShowLineNumbers = false
-	ta.KeyMap.InsertNewline.SetEnabled(false)
+	ta.KeyMap.InsertNewline.SetEnabled(true) // Enable Shift+Enter for multi-line input
 
 	vp := viewport.New(width-4, height-4)
 	vp.YPosition = 0
@@ -90,6 +90,9 @@ func (c ChatView) Update(msg tea.Msg) (ChatView, tea.Cmd) {
 
 	// Always update spinner to keep tick chain alive
 	c.spinner, spinnerCmd = c.spinner.Update(msg)
+
+	// Adjust textarea height based on content for multi-line support
+	c.adjustTextareaHeight()
 
 	return c, tea.Batch(vpCmd, taCmd, spinnerCmd)
 }
@@ -496,4 +499,24 @@ func (c *ChatView) ClearLoadingState() {
 // IsShowingLoading returns whether the chat is currently showing a loading state
 func (c *ChatView) IsShowingLoading() bool {
 	return c.showingLoadingState
+}
+
+// adjustTextareaHeight dynamically adjusts the textarea height based on content
+func (c *ChatView) adjustTextareaHeight() {
+	content := c.textarea.Value()
+	lines := strings.Count(content, "\n") + 1
+
+	// Minimum height of 1, maximum height of maxInputHeight
+	newHeight := lines
+	if newHeight < 1 {
+		newHeight = 1
+	}
+	if newHeight > maxInputHeight {
+		newHeight = maxInputHeight
+	}
+
+	// Only update if height needs to change
+	if c.textarea.Height() != newHeight {
+		c.textarea.SetHeight(newHeight)
+	}
 }
