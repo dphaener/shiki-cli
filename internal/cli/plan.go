@@ -71,9 +71,9 @@ func startPlanSession(specSlug string) error {
 	// Check if resuming existing plan
 	isResume := storage.PlanExists(specSlug)
 	if isResume {
-		PrintInfo("Resuming existing plan for: %s", spec.FriendlyName)
+		PrintInfo("Resuming existing plan for: %s", spec.FeatureName)
 	} else {
-		PrintSuccess("Starting new plan for: %s", spec.FriendlyName)
+		PrintSuccess("Starting new plan for: %s", spec.FeatureName)
 	}
 
 	PrintSuccess("Feature number: %03d", spec.Number)
@@ -92,7 +92,7 @@ func startPlanSession(specSlug string) error {
 		ID:            fmt.Sprintf("plan-%d-%s", time.Now().Unix(), specSlug),
 		SpecSlug:      specSlug,
 		FeatureNumber: spec.Number,
-		FriendlyName:  spec.FriendlyName,
+		FriendlyName:  spec.FeatureName,
 		Phase:         types.PlanPhaseInterrogation,
 		ChatHistory:   []types.ChatMessage{},
 		CurrentPlan:   currentPlan,
@@ -185,7 +185,7 @@ func listPlans() error {
 
 		if hasPlan {
 			hasPlans = true
-			PrintInfo("  %03d - %s", spec.Number, spec.FriendlyName)
+			PrintInfo("  %03d - %s", spec.Number, spec.FeatureName)
 			PrintInfo("      Slug: %s", spec.Slug)
 			PrintInfo("      Plan: %s", planPath)
 			PrintInfo("      Spec Status: %s", spec.Status)
@@ -208,7 +208,7 @@ type specItem struct {
 	spec *storage.FeatureSpec
 }
 
-func (i specItem) FilterValue() string { return i.spec.FriendlyName }
+func (i specItem) FilterValue() string { return i.spec.FeatureName }
 
 // specItemDelegate handles rendering of spec items
 type specItemDelegate struct{}
@@ -237,7 +237,7 @@ func (d specItemDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		Foreground(lipgloss.Color("240"))
 
 	// Title line
-	title := fmt.Sprintf("%03d - %s", spec.Number, spec.FriendlyName)
+	title := fmt.Sprintf("%03d - %s", spec.Number, spec.FeatureName)
 	if selected {
 		title = "> " + title
 		fmt.Fprintln(w, selectedStyle.Render(title))

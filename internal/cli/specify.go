@@ -15,7 +15,7 @@ import (
 // NewSpecifyCommand creates the specify command
 func NewSpecifyCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "specify [description]",
+		Use:   "specify [feature-name]",
 		Short: "Create feature specification through AI collaboration",
 		Long: `Create a feature specification through interactive AI collaboration.
 
@@ -23,39 +23,39 @@ The specify command launches an interactive TUI with AI-assisted specification
 generation. The AI will ask clarifying questions, generate a structured spec,
 and validate quality before saving.
 
-When called with a description, the AI will proceed directly to generating
-a specification draft. When called without arguments, the AI will ask what
-feature you'd like to specify.
+When called with a feature name, the AI will proceed directly to generating
+a specification draft for that named feature. When called without arguments,
+you will be prompted to provide a feature name.
 
 Examples:
-  collab specify "Add user authentication"
-  collab specify "Real-time collaboration dashboard"
-  collab specify                                      # AI asks what to specify
+  collab specify "user-authentication"
+  collab specify "Real-time Collaboration Dashboard"
+  collab specify                                      # Prompts for feature name
 
 Subcommands:
   collab specify list                                 # List all specs
   collab specify resume <slug>                        # Resume existing spec`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Handle no arguments - launch TUI and let AI ask
+			// Handle no arguments - prompt for feature name
 			if len(args) == 0 {
 				return startNewSpec("")
 			}
 
-			featureDesc := strings.Join(args, " ")
+			featureName := strings.Join(args, " ")
 
 			// Check for list/resume subcommands
-			if featureDesc == "list" {
+			if featureName == "list" {
 				return listSpecs()
 			}
 
-			if strings.HasPrefix(featureDesc, "resume ") {
-				slug := strings.TrimPrefix(featureDesc, "resume ")
+			if strings.HasPrefix(featureName, "resume ") {
+				slug := strings.TrimPrefix(featureName, "resume ")
 				return resumeSpec(slug)
 			}
 
-			// Create new specify session with description
-			return startNewSpec(featureDesc)
+			// Create new specify session with feature name
+			return startNewSpec(featureName)
 		},
 	}
 
@@ -63,82 +63,59 @@ Subcommands:
 }
 
 // startNewSpec creates a new specification session
-func startNewSpec(featureDesc string) error {
-	var featureNumber int
-	var slug string
-	var friendlyName string
-	var specFile string
-	var specDir string
-	var checklistDir string
+func startNewSpec(featureName string) error {
+	var finalFeatureName string
 	var err error
 
-	if featureDesc != "" {
-		// WITH ARGUMENT: Setup feature directories first, then launch TUI
-		friendlyName = featureDesc
-		if len(friendlyName) > 50 {
-			friendlyName = friendlyName[:50]
-		}
-
-		result, err := storage.SetupFeature(storage.FeatureSetupConfig{
-			FriendlyName: friendlyName,
-			Description:  featureDesc,
-		})
-		if err != nil {
-			PrintError("Failed to setup feature: %v", err)
+	if featureName != "" {
+		// WITH ARGUMENT: Validate the provided feature name
+		if err := storage.ValidateFeatureName(featureName); err != nil {
+			PrintError("Invalid feature name: %v", err)
 			return ExitWithCode(ExitError)
 		}
-
-		featureNumber = result.FeatureNumber
-		slug = result.Slug
-		specFile = result.SpecFile
-		specDir = result.FeatureDir
-		checklistDir = result.ChecklistDir
-
-		PrintSuccess("Starting specification for: %s", friendlyName)
-		PrintSuccess("Feature number: %03d", featureNumber)
-		PrintSuccess("Slug: %s", slug)
-		PrintSuccess("Feature directory: %s", result.FeatureDir)
-		PrintInfo("")
-		PrintInfo("Launching interactive specification TUI...")
+		finalFeatureName = strings.TrimSpace(featureName)
 	} else {
-		// NO ARGUMENT: Get feature number but don't create directories yet
-		// AI will prompt for description, then we can create directories
-		featureNumber, err = storage.GetNextFeatureNumber()
+		// NO ARGUMENT: Prompt for feature name
+		PrintInfo("Creating a new feature specification...")
+		finalFeatureName, err = storage.PromptForFeatureName()
 		if err != nil {
-			PrintError("Failed to get feature number: %v", err)
+			PrintError("Failed to get feature name: %v", err)
 			return ExitWithCode(ExitError)
 		}
-
-		// Use placeholder values - AI will ask for the real description
-		friendlyName = "New Feature"
-		slug = storage.CreateSlug(friendlyName, featureNumber)
-
-		// Set up paths using storage functions
-		specDir = storage.GetSpecDir(slug)
-		specFile = filepath.Join(specDir, "spec.md")
-		checklistDir = filepath.Join(specDir, "checklists")
-
-		PrintInfo("Launching interactive specification TUI...")
-		PrintInfo("The AI will ask what feature you'd like to specify.")
-		PrintInfo("")
 	}
+
+	// Setup feature directories with validated name
+	result, err := storage.SetupFeature(storage.FeatureSetupConfig{
+		FeatureName: finalFeatureName,
+	})
+	if err != nil {
+		PrintError("Failed to setup feature: %v", err)
+		return ExitWithCode(ExitError)
+	}
+
+	PrintSuccess("Starting specification for: %s", finalFeatureName)
+	PrintSuccess("Feature number: %03d", result.FeatureNumber)
+	PrintSuccess("Slug: %s", result.Slug)
+	PrintSuccess("Feature directory: %s", result.FeatureDir)
+	PrintInfo("")
+	PrintInfo("Launching interactive specification TUI...")
 
 	// Create session
 	session := &types.SpecifySession{
-		ID:                     fmt.Sprintf("spec-%d-%s", time.Now().Unix(), slug),
-		FeatureDesc:            featureDesc,
-		FeatureNumber:          featureNumber,
-		Slug:                   slug,
-		FriendlyName:           friendlyName,
+		ID:                     fmt.Sprintf("spec-%d-%s", time.Now().Unix(), result.Slug),
+		FeatureDesc:            finalFeatureName, // Now contains the feature name instead of description
+		FeatureNumber:          result.FeatureNumber,
+		Slug:                   result.Slug,
+		FriendlyName:           finalFeatureName,
 		Phase:                  types.PhaseDiscovery,
 		ChatHistory:            []types.ChatMessage{},
 		CreatedAt:              time.Now(),
 		UpdatedAt:              time.Now(),
 		Status:                 types.SessionRunning,
-		SkipDiscoveryQuestions: featureDesc != "",
-		SpecFile:               specFile,
-		SpecDir:                specDir,
-		ChecklistDir:           checklistDir,
+		SkipDiscoveryQuestions: false, // Always go through discovery since we only have a name, not a description
+		SpecFile:               result.SpecFile,
+		SpecDir:                result.FeatureDir,
+		ChecklistDir:           result.ChecklistDir,
 	}
 
 	// Launch TUI in specify mode
@@ -162,10 +139,10 @@ func resumeSpec(slug string) error {
 	// Create session from spec
 	session := &types.SpecifySession{
 		ID:            fmt.Sprintf("spec-%d-%s", time.Now().Unix(), slug),
-		FeatureDesc:   spec.FriendlyName,
+		FeatureDesc:   spec.FeatureName,
 		FeatureNumber: spec.Number,
 		Slug:          spec.Slug,
-		FriendlyName:  spec.FriendlyName,
+		FriendlyName:  spec.FeatureName,
 		Phase:         types.PhaseDiscovery, // TODO: Restore phase from metadata
 		ChatHistory:   []types.ChatMessage{},
 		CurrentSpec:   spec.Content,
@@ -177,7 +154,7 @@ func resumeSpec(slug string) error {
 		ChecklistDir:  checklistDir,
 	}
 
-	PrintSuccess("Resuming specification: %s", spec.FriendlyName)
+	PrintSuccess("Resuming specification: %s", spec.FeatureName)
 	PrintSuccess("Feature: %s", spec.Slug)
 	PrintInfo("")
 	PrintInfo("Launching interactive specification TUI...")
@@ -207,7 +184,7 @@ func listSpecs() error {
 		if status == "" {
 			status = "draft"
 		}
-		PrintInfo("  %03d - %s", spec.Number, spec.FriendlyName)
+		PrintInfo("  %03d - %s", spec.Number, spec.FeatureName)
 		PrintInfo("      Slug: %s", spec.Slug)
 		PrintInfo("      Status: %s", status)
 		PrintInfo("      Created: %s", spec.CreatedAt.Format("2006-01-02"))

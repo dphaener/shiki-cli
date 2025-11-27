@@ -10,8 +10,7 @@ import (
 
 // FeatureSetupConfig contains configuration for setting up a new feature
 type FeatureSetupConfig struct {
-	FriendlyName string
-	Description  string
+	FeatureName string
 }
 
 // FeatureSetupResult contains the result of feature setup
@@ -28,8 +27,7 @@ type FeatureSetupResult struct {
 type FeatureMeta struct {
 	FeatureNumber int       `json:"feature_number"`
 	Slug          string    `json:"slug"`
-	FriendlyName  string    `json:"friendly_name"`
-	Description   string    `json:"description"`
+	FeatureName   string    `json:"feature_name"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	Status        string    `json:"status"`
@@ -49,8 +47,13 @@ func SetupFeature(cfg FeatureSetupConfig) (*FeatureSetupResult, error) {
 
 // SetupFeatureWithNumber creates the feature structure using a specific feature number
 func SetupFeatureWithNumber(cfg FeatureSetupConfig, featureNumber int) (*FeatureSetupResult, error) {
-	// Generate slug from friendly name
-	slug := CreateSlug(cfg.FriendlyName, featureNumber)
+	// Generate slug from feature name
+	slug := CreateSlugFromName(cfg.FeatureName, featureNumber)
+
+	// Check for directory conflicts
+	if FeatureExists(slug) {
+		return nil, fmt.Errorf("feature directory already exists: %s (try a different feature name)", slug)
+	}
 
 	// Use XDG storage path
 	featureDir := GetSpecDir(slug)
@@ -115,7 +118,7 @@ func SetupFeatureWithNumber(cfg FeatureSetupConfig, featureNumber int) (*Feature
 ## Open Questions
 
 - [question]
-`, cfg.FriendlyName, featureNumber, slug, time.Now().Format("2006-01-02"))
+`, cfg.FeatureName, featureNumber, slug, time.Now().Format("2006-01-02"))
 
 	if err := AtomicWriteString(specFile, initialSpec, 0o644); err != nil {
 		return nil, fmt.Errorf("write spec file: %w", err)
@@ -127,8 +130,7 @@ func SetupFeatureWithNumber(cfg FeatureSetupConfig, featureNumber int) (*Feature
 	meta := FeatureMeta{
 		FeatureNumber: featureNumber,
 		Slug:          slug,
-		FriendlyName:  cfg.FriendlyName,
-		Description:   cfg.Description,
+		FeatureName:   cfg.FeatureName,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 		Status:        "draft",

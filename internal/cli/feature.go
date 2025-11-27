@@ -14,7 +14,7 @@ import (
 // NewFeatureCommand creates the feature command
 func NewFeatureCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "feature [description]",
+		Use:   "feature [feature-name]",
 		Short: "Unified feature development workflow",
 		Long: `Start or resume a unified feature development workflow.
 
@@ -25,13 +25,13 @@ Each phase has an approval gate where you can approve to continue, go back to
 make changes, or quit and resume later.
 
 Examples:
-  collab feature "Add user authentication"    # Start new feature workflow
-  collab feature                              # AI asks what to build
-  collab feature resume 001-user-auth         # Resume existing workflow
-  collab feature list                         # List active workflows`,
+  collab feature "user-authentication"       # Start new feature workflow
+  collab feature                             # Prompts for feature name
+  collab feature resume 001-user-auth        # Resume existing workflow
+  collab feature list                        # List active workflows`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Handle no arguments - start new workflow without description
+			// Handle no arguments - prompt for feature name
 			if len(args) == 0 {
 				return startNewWorkflow("")
 			}
@@ -48,7 +48,7 @@ Examples:
 				return resumeWorkflow(slug)
 			}
 
-			// Start new workflow with description
+			// Start new workflow with feature name
 			return startNewWorkflow(input)
 		},
 	}
@@ -57,49 +57,41 @@ Examples:
 }
 
 // startNewWorkflow creates and starts a new unified workflow
-func startNewWorkflow(featureDesc string) error {
-	var friendlyName string
-	var result *storage.WorkflowSetupResult
+func startNewWorkflow(featureName string) error {
+	var finalFeatureName string
 	var err error
 
-	if featureDesc != "" {
-		// WITH DESCRIPTION: Setup feature directories first
-		friendlyName = featureDesc
-		if len(friendlyName) > 50 {
-			friendlyName = friendlyName[:50]
-		}
-
-		result, err = storage.SetupWorkflowSession(storage.FeatureSetupConfig{
-			FriendlyName: friendlyName,
-			Description:  featureDesc,
-		})
-		if err != nil {
-			PrintError("Failed to setup workflow: %v", err)
+	if featureName != "" {
+		// WITH ARGUMENT: Validate the provided feature name
+		if err := storage.ValidateFeatureName(featureName); err != nil {
+			PrintError("Invalid feature name: %v", err)
 			return ExitWithCode(ExitError)
 		}
-
-		PrintSuccess("Starting unified workflow for: %s", friendlyName)
-		PrintSuccess("Feature number: %03d", result.FeatureNumber)
-		PrintSuccess("Slug: %s", result.Slug)
-		PrintInfo("")
-		PrintInfo("Launching unified feature workflow TUI...")
+		finalFeatureName = strings.TrimSpace(featureName)
 	} else {
-		// NO DESCRIPTION: Still setup directories with placeholder name
-		friendlyName = "New Feature"
-
-		result, err = storage.SetupWorkflowSession(storage.FeatureSetupConfig{
-			FriendlyName: friendlyName,
-			Description:  "",
-		})
+		// NO ARGUMENT: Prompt for feature name
+		PrintInfo("Creating a new feature workflow...")
+		finalFeatureName, err = storage.PromptForFeatureName()
 		if err != nil {
-			PrintError("Failed to setup workflow: %v", err)
+			PrintError("Failed to get feature name: %v", err)
 			return ExitWithCode(ExitError)
 		}
-
-		PrintInfo("Launching unified feature workflow TUI...")
-		PrintInfo("The AI will ask what feature you'd like to build.")
-		PrintInfo("")
 	}
+
+	// Setup workflow directories with validated name
+	result, err := storage.SetupWorkflowSession(storage.FeatureSetupConfig{
+		FeatureName: finalFeatureName,
+	})
+	if err != nil {
+		PrintError("Failed to setup workflow: %v", err)
+		return ExitWithCode(ExitError)
+	}
+
+	PrintSuccess("Starting unified workflow for: %s", finalFeatureName)
+	PrintSuccess("Feature number: %03d", result.FeatureNumber)
+	PrintSuccess("Slug: %s", result.Slug)
+	PrintInfo("")
+	PrintInfo("Launching unified feature workflow TUI...")
 
 	// Create workflow session
 	session := &types.WorkflowSession{
@@ -107,8 +99,8 @@ func startNewWorkflow(featureDesc string) error {
 		CurrentPhase:  types.WorkflowPhaseSpecify,
 		FeatureNumber: result.FeatureNumber,
 		Slug:          result.Slug,
-		FriendlyName:  friendlyName,
-		FeatureDesc:   featureDesc,
+		FriendlyName:  finalFeatureName,
+		FeatureDesc:   finalFeatureName, // Now contains the feature name instead of description
 		SpecFile:      result.SpecFile,
 		PlanFile:      result.PlanFile,
 		TasksFile:     result.TasksFile,

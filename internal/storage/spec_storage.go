@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/darinhaener/collab/internal/config"
 	"gopkg.in/yaml.v3"
@@ -15,39 +17,109 @@ import (
 
 // FeatureSpec represents a feature specification
 type FeatureSpec struct {
-	Number       int       `json:"number"`
-	Slug         string    `json:"slug"`
-	FriendlyName string    `json:"friendly_name"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Status       string    `json:"status"` // draft, in-progress, complete
-	Content      string    `json:"-"`      // spec.md content (not in JSON)
+	Number      int       `json:"number"`
+	Slug        string    `json:"slug"`
+	FeatureName string    `json:"feature_name"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Status      string    `json:"status"` // draft, in-progress, complete
+	Content     string    `json:"-"`      // spec.md content (not in JSON)
 }
 
 // SpecMetadata holds metadata for the spec frontmatter
 type SpecMetadata struct {
 	FeatureNumber int       `yaml:"feature_number"`
 	Slug          string    `yaml:"slug"`
-	FriendlyName  string    `yaml:"friendly_name"`
+	FeatureName   string    `yaml:"feature_name"`
 	CreatedAt     time.Time `yaml:"created_at"`
 	UpdatedAt     time.Time `yaml:"updated_at"`
 	Status        string    `yaml:"status"`
 }
 
-// CreateSlug converts a friendly name to a slug format
-func CreateSlug(friendlyName string, featureNumber int) string {
-	// Convert to lowercase
-	slug := strings.ToLower(friendlyName)
+// ValidateFeatureName validates a feature name according to requirements
+func ValidateFeatureName(name string) error {
+	// Check for empty name before trimming (important for whitespace-only detection)
+	if name == "" {
+		return fmt.Errorf("feature name cannot be empty")
+	}
 
-	// Replace spaces and special chars with hyphens
-	reg := regexp.MustCompile(`[^a-z0-9]+`)
+	// Check for whitespace-only names
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return fmt.Errorf("feature name cannot be whitespace-only")
+	}
+
+	// Check length limit (100 characters) on the original name
+	if len(name) > 100 {
+		return fmt.Errorf("feature name cannot exceed 100 characters (got %d)", len(name))
+	}
+
+	// Check for directory traversal characters
+	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
+		return fmt.Errorf("feature name cannot contain directory traversal characters (/, \\, ..)")
+	}
+
+	// Check for other problematic characters
+	problematicChars := []string{"\x00", "\n", "\r", "\t"}
+	for _, char := range problematicChars {
+		if strings.Contains(name, char) {
+			return fmt.Errorf("feature name contains invalid control characters")
+		}
+	}
+
+	return nil
+}
+
+// CreateSlugFromName converts a feature name to a slug format with enhanced validation
+func CreateSlugFromName(featureName string, featureNumber int) string {
+	// Trim whitespace first
+	name := strings.TrimSpace(featureName)
+
+	// Convert to lowercase
+	slug := strings.ToLower(name)
+
+	// Handle Unicode characters by normalizing them
+	var result strings.Builder
+	for _, r := range slug {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			result.WriteRune(r)
+		} else if unicode.IsSpace(r) || unicode.IsPunct(r) || unicode.IsSymbol(r) {
+			result.WriteRune('-')
+		}
+		// Skip other Unicode categories (marks, etc.)
+	}
+	slug = result.String()
+
+	// Replace multiple consecutive hyphens with single hyphen
+	reg := regexp.MustCompile(`-+`)
 	slug = reg.ReplaceAllString(slug, "-")
 
 	// Remove leading/trailing hyphens
 	slug = strings.Trim(slug, "-")
 
+	// Ensure we have some content after sanitization
+	if slug == "" {
+		slug = "feature"
+	}
+
+	// Truncate if too long (leave room for number prefix and hyphen)
+	maxSlugLength := 50 // reasonable filesystem limit
+	if len(slug) > maxSlugLength {
+		// Try to truncate at word boundary
+		if lastHyphen := strings.LastIndex(slug[:maxSlugLength], "-"); lastHyphen > 10 {
+			slug = slug[:lastHyphen]
+		} else {
+			slug = slug[:maxSlugLength]
+		}
+	}
+
 	// Add feature number prefix
 	return fmt.Sprintf("%03d-%s", featureNumber, slug)
+}
+
+// CreateSlug maintains backward compatibility by calling CreateSlugFromName
+func CreateSlug(friendlyName string, featureNumber int) string {
+	return CreateSlugFromName(friendlyName, featureNumber)
 }
 
 // GetSpecsDir returns the base directory for all specs
@@ -89,7 +161,7 @@ func SaveSpec(spec *FeatureSpec) error {
 	metadata := SpecMetadata{
 		FeatureNumber: spec.Number,
 		Slug:          spec.Slug,
-		FriendlyName:  spec.FriendlyName,
+		FeatureName:   spec.FeatureName,
 		CreatedAt:     spec.CreatedAt,
 		UpdatedAt:     spec.UpdatedAt,
 		Status:        spec.Status,
@@ -249,4 +321,31 @@ func readSpecContent(path string) (string, *SpecMetadata, error) {
 	}
 
 	return strings.TrimSpace(parts[2]), &meta, nil
+}
+
+// PromptForFeatureName prompts the user for a feature name with validation and retry logic
+func PromptForFeatureName() (string, error) {
+	scanner := bufio.NewScanner(os.Stdin)
+
+	for {
+		fmt.Print("What would you like to name this feature? ")
+
+		if !scanner.Scan() {
+			// Handle EOF or interrupted input
+			if err := scanner.Err(); err != nil {
+				return "", fmt.Errorf("input error: %w", err)
+			}
+			return "", fmt.Errorf("input interrupted")
+		}
+
+		name := scanner.Text()
+
+		// Validate the input
+		if err := ValidateFeatureName(name); err != nil {
+			fmt.Printf("Invalid feature name: %v\nPlease try again.\n\n", err)
+			continue
+		}
+
+		return strings.TrimSpace(name), nil
+	}
 }
