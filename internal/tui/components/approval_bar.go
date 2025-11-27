@@ -53,10 +53,7 @@ func (a ApprovalBar) View() string {
 
 	shortcutStr := strings.Join(parts, "")
 
-	// Add AI waiting indicator if needed
-	if a.waitingForAI {
-		shortcutStr += approvalBarWaitingStyle.Render(" | ⏳ Waiting for AI...")
-	}
+	// Loading state removed - now handled by ChatView component
 
 	return approvalBarStyle.Width(a.width).Render(shortcutStr)
 }

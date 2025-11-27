@@ -13,6 +13,7 @@ import (
 	"github.com/darinhaener/collab/pkg/types"
 )
 
+
 // WorkflowModel manages the unified feature workflow TUI
 type WorkflowModel struct {
 	session  *types.WorkflowSession
@@ -38,6 +39,7 @@ type WorkflowModel struct {
 	err          error
 	showingModal bool
 	waitingForAI bool
+	layoutCache  LayoutCache
 
 	// Current active model for delegation
 	activePhaseModel tea.Model
@@ -252,6 +254,9 @@ func (m WorkflowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+		// Invalidate layout cache since window size changed
+		m.invalidateLayoutCache()
+
 		// Update progress stepper size
 		m.progressStepper.SetWidth(msg.Width)
 
@@ -394,11 +399,18 @@ func (m WorkflowModel) View() string {
 		parts = append(parts, m.approvalView.View())
 	} else if m.activePhaseModel != nil {
 		// In working phase - show phase model content
+		// First render footer to cache its height
+		footer := m.renderFooter()
+		m.layoutCache.FooterHeight = lipgloss.Height(footer)
+		m.layoutCache.HeaderHeight = lipgloss.Height(header)
+		m.layoutCache.LastWidth = m.width
+		m.layoutCache.LastHeight = m.height
+		m.layoutCache.Dirty = false
+
 		content := m.renderPhaseContent()
 		parts = append(parts, content)
 
 		// Footer with approval bar (only in working phases)
-		footer := m.renderFooter()
 		parts = append(parts, footer)
 	}
 
@@ -441,13 +453,17 @@ func (m *WorkflowModel) renderPhaseContent() string {
 		return "No active phase"
 	}
 
-	// Calculate available height for content
-	headerHeight := lipgloss.Height(m.renderHeader())
-	footerHeight := lipgloss.Height(m.renderFooter())
-	contentHeight := m.height - headerHeight - footerHeight
+	// Calculate available height for content using cached heights
+	// Heights are cached in View() method before calling renderPhaseContent()
+	contentHeight := m.height - m.layoutCache.HeaderHeight - m.layoutCache.FooterHeight
 
-	// Get view from active model
-	content := m.activePhaseModel.View()
+	// Get view from active model - use ViewContent if available to avoid duplicate headers/footers
+	var content string
+	if contentProvider, ok := m.activePhaseModel.(ContentProvider); ok {
+		content = contentProvider.ViewContent()
+	} else {
+		content = m.activePhaseModel.View()
+	}
 
 	// Style the content area
 	return workflowContentStyle.
@@ -646,4 +662,20 @@ func (m *WorkflowModel) getKeyboardShortcuts() []string {
 		"Tab: Switch Pane",
 		"Esc: Quit",
 	}
+}
+
+// updateLayoutCache updates the cached header and footer heights if needed
+func (m *WorkflowModel) updateLayoutCache() {
+	if m.layoutCache.Dirty || m.width != m.layoutCache.LastWidth || m.height != m.layoutCache.LastHeight {
+		m.layoutCache.HeaderHeight = lipgloss.Height(m.renderHeader())
+		m.layoutCache.FooterHeight = lipgloss.Height(m.renderFooter())
+		m.layoutCache.LastWidth = m.width
+		m.layoutCache.LastHeight = m.height
+		m.layoutCache.Dirty = false
+	}
+}
+
+// invalidateLayoutCache marks the layout cache as dirty, requiring recalculation
+func (m *WorkflowModel) invalidateLayoutCache() {
+	m.layoutCache.Dirty = true
 }
