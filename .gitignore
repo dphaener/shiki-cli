@@ -130,3 +130,5 @@ coverage.out
 
 # Sessions data (if testing locally)
 .local/share/collab-cli/sessions/*
+
+KNOWN_BUGS.md
