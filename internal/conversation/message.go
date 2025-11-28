@@ -42,13 +42,17 @@ func NewTextPart(content string) TextPart {
 
 // ToolCallPart represents a tool invocation request.
 type ToolCallPart struct {
-	ID         string                 `json:"id"`
-	ToolName   string                 `json:"tool_name"`
-	Input      map[string]interface{} `json:"input"`
-	Status     ToolCallStatus         `json:"status"`
-	CreatedAt  time.Time              `json:"created_at"`
-	StartedAt  *time.Time             `json:"started_at,omitempty"`
-	FinishedAt *time.Time             `json:"finished_at,omitempty"`
+	ID           string                 `json:"id"`
+	ToolName     string                 `json:"tool_name"`
+	Input        map[string]interface{} `json:"input"`
+	Status       ToolCallStatus         `json:"status"`
+	CreatedAt    time.Time              `json:"created_at"`
+	StartedAt    *time.Time             `json:"started_at,omitempty"`
+	FinishedAt   *time.Time             `json:"finished_at,omitempty"`
+	// Tool chain fields for rollup behavior
+	ChainID      string                 `json:"chain_id,omitempty"`      // ID of tool chain this belongs to
+	IsReplaced   bool                   `json:"is_replaced,omitempty"`   // True if replaced by later tool in chain
+	Resource     string                 `json:"resource,omitempty"`      // Primary resource this tool operates on
 }
 
 func (p ToolCallPart) Type() PartType       { return PartTypeToolCall }
@@ -84,6 +88,27 @@ func (p *ToolCallPart) MarkFailed() {
 	p.Status = ToolCallFailed
 	now := time.Now()
 	p.FinishedAt = &now
+}
+
+// SetChainInfo updates the tool chain information.
+func (p *ToolCallPart) SetChainInfo(chainID, resource string) {
+	p.ChainID = chainID
+	p.Resource = resource
+}
+
+// MarkReplaced marks this tool as replaced by a later tool in the chain.
+func (p *ToolCallPart) MarkReplaced() {
+	p.IsReplaced = true
+}
+
+// UnmarkReplaced removes the replaced status (for undo operations).
+func (p *ToolCallPart) UnmarkReplaced() {
+	p.IsReplaced = false
+}
+
+// IsInChain returns true if this tool is part of a tool chain.
+func (p *ToolCallPart) IsInChain() bool {
+	return p.ChainID != ""
 }
 
 // ToolResultPart contains the result of a tool invocation.
@@ -240,6 +265,54 @@ func (m *Message) UpdateToolCallStatus(toolCallID string, status ToolCallStatus)
 		}
 	}
 	return false
+}
+
+// UpdateToolCallChain updates the tool chain information for a tool call.
+func (m *Message) UpdateToolCallChain(toolCallID, chainID, resource string) bool {
+	for i := range m.Parts {
+		if tc, ok := m.Parts[i].(ToolCallPart); ok && tc.ID == toolCallID {
+			tc.SetChainInfo(chainID, resource)
+			m.Parts[i] = tc
+			m.UpdatedAt = time.Now()
+			return true
+		}
+	}
+	return false
+}
+
+// MarkToolCallReplaced marks a tool call as replaced in its chain.
+func (m *Message) MarkToolCallReplaced(toolCallID string) bool {
+	for i := range m.Parts {
+		if tc, ok := m.Parts[i].(ToolCallPart); ok && tc.ID == toolCallID {
+			tc.MarkReplaced()
+			m.Parts[i] = tc
+			m.UpdatedAt = time.Now()
+			return true
+		}
+	}
+	return false
+}
+
+// GetToolCallsByChain returns all tool calls belonging to a specific chain.
+func (m *Message) GetToolCallsByChain(chainID string) []ToolCallPart {
+	var chainTools []ToolCallPart
+	for _, part := range m.Parts {
+		if tc, ok := part.(ToolCallPart); ok && tc.ChainID == chainID {
+			chainTools = append(chainTools, tc)
+		}
+	}
+	return chainTools
+}
+
+// GetActiveToolCalls returns tool calls that are not replaced (visible in UI).
+func (m *Message) GetActiveToolCalls() []ToolCallPart {
+	var activeCalls []ToolCallPart
+	for _, part := range m.Parts {
+		if tc, ok := part.(ToolCallPart); ok && !tc.IsReplaced {
+			activeCalls = append(activeCalls, tc)
+		}
+	}
+	return activeCalls
 }
 
 // StartStreaming marks the message as actively streaming.

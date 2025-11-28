@@ -299,8 +299,11 @@ func (o *TasksOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdat
 									logger.log("Tool use block: %s (ID: %s)", content.Name, content.ID)
 
 									var argsStr string
+									var argsMap map[string]interface{}
 									if len(content.Input) > 0 {
 										argsStr = string(content.Input)
+										// Also parse as map for rich display
+										_ = json.Unmarshal(content.Input, &argsMap)
 									}
 
 									pendingTools[content.ID] = struct {
@@ -314,6 +317,7 @@ func (o *TasksOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdat
 									updateChan <- MessageUpdate{
 										Type:    "tool_use",
 										Content: content.Name,
+										Args:    argsMap,
 									}
 								}
 							}

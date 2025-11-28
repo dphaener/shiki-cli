@@ -67,11 +67,16 @@ var (
 
 // RenderPart renders a single message part to a string.
 func RenderPart(part conversation.Part, width int) string {
+	return RenderPartWithChainManager(part, width, nil)
+}
+
+// RenderPartWithChainManager renders a single message part with tool chain awareness.
+func RenderPartWithChainManager(part conversation.Part, width int, chainManager *ToolChainManager) string {
 	switch p := part.(type) {
 	case conversation.TextPart:
 		return renderTextPart(p, width)
 	case conversation.ToolCallPart:
-		return renderToolCallPart(p, width)
+		return renderToolCallPartWithChains(p, width, chainManager)
 	case conversation.ToolResultPart:
 		return renderToolResultPart(p, width)
 	case conversation.ReasoningPart:
@@ -126,6 +131,144 @@ func renderToolCallPart(part conversation.ToolCallPart, width int) string {
 	}
 
 	return headerLine
+}
+
+// renderToolCallPartWithChains renders a tool call with chain awareness and smart rollup.
+func renderToolCallPartWithChains(part conversation.ToolCallPart, width int, chainManager *ToolChainManager) string {
+	// If no chain manager, fall back to regular rendering
+	if chainManager == nil {
+		return renderToolCallPart(part, width)
+	}
+
+	// Check if this tool is part of a chain
+	chain := chainManager.GetChainByToolID(part.ID)
+	if chain == nil {
+		return renderToolCallPart(part, width)
+	}
+
+	// If this tool is replaced in its chain, don't render it (it's been rolled up)
+	if part.IsReplaced {
+		return "" // Tool is hidden by rollup behavior
+	}
+
+	// This is the current tool in the chain - render with enhanced state
+	return renderActiveChainTool(chain, part, width)
+}
+
+// renderActiveChainTool renders the currently active tool in a chain with enhanced state info.
+func renderActiveChainTool(chain *ToolChain, part conversation.ToolCallPart, width int) string {
+	// Get current tool execution state from chain
+	var currentExec *ToolExecution
+	for _, tool := range chain.Tools {
+		if tool.ToolCallID == part.ID {
+			currentExec = tool
+			break
+		}
+	}
+
+	if currentExec == nil {
+		// Fallback to regular rendering if we can't find execution state
+		return renderToolCallPart(part, width)
+	}
+
+	// Enhanced status indicator based on execution state
+	statusIcon := getEnhancedStatusIcon(currentExec.State)
+
+	// Tool icon and name
+	toolIcon := lipgloss.NewStyle().
+		Foreground(theme.Info).
+		Bold(true).
+		Render("▶")
+
+	toolName := toolCallNameStyle.Render(truncateString(part.ToolName, width-20))
+
+	// Show resource info if this is part of a chain with replaced tools
+	resourceInfo := ""
+	if len(chain.ReplacedTools) > 0 {
+		displayName := chain.Resource
+		if len(displayName) > 30 {
+			displayName = "..." + displayName[len(displayName)-27:]
+		}
+		resourceInfo = toolCallArgsStyle.Render(fmt.Sprintf(" [chain: %s]", displayName))
+	}
+
+	// Build the header line
+	headerLine := fmt.Sprintf("  %s %s %s%s", statusIcon, toolIcon, toolName, resourceInfo)
+
+	// Format arguments if present (but shorter for chain tools to save space)
+	if len(part.Input) > 0 {
+		argsLines := formatToolArgsCompact(part.Input, width-6, len(chain.ReplacedTools) > 0)
+		if argsLines != "" {
+			return headerLine + "\n" + argsLines
+		}
+	}
+
+	return headerLine
+}
+
+// getEnhancedStatusIcon returns appropriate status icon for tool execution state.
+func getEnhancedStatusIcon(state ExecutionState) string {
+	switch state {
+	case ExecutionStatePending:
+		return toolStatusPendingStyle
+	case ExecutionStateRunning:
+		return toolStatusRunningStyle // Could add spinner animation here
+	case ExecutionStateCompleted:
+		return toolStatusCompletedStyle
+	case ExecutionStateError:
+		return toolStatusFailedStyle
+	case ExecutionStateCancelled:
+		return lipgloss.NewStyle().Foreground(theme.Warning).Render("⊗")
+	default:
+		return toolStatusPendingStyle
+	}
+}
+
+// formatToolArgsCompact formats tool arguments in a more compact form for chains.
+func formatToolArgsCompact(args map[string]interface{}, width int, isChainTool bool) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	maxArgs := 3 // Fewer args for chain tools to save space
+	if !isChainTool {
+		maxArgs = 5
+	}
+
+	var lines []string
+	maxKeyLen := 12 // Shorter for compact display
+
+	argCount := 0
+	for key, value := range args {
+		if key == "_raw" {
+			continue // Skip internal raw data
+		}
+
+		if argCount >= maxArgs {
+			remaining := len(args) - maxArgs
+			if remaining > 0 {
+				lines = append(lines, toolCallArgsStyle.Render(
+					fmt.Sprintf("      ... and %d more", remaining),
+				))
+			}
+			break
+		}
+
+		keyStr := truncateString(key, maxKeyLen)
+		valueStr := formatArgValue(value, width-maxKeyLen-8)
+
+		// Pad key for alignment
+		paddedKey := fmt.Sprintf("%-*s", maxKeyLen, keyStr)
+
+		line := fmt.Sprintf("      %s: %s",
+			toolCallArgKeyStyle.Render(paddedKey),
+			toolCallArgValueStyle.Render(valueStr),
+		)
+		lines = append(lines, line)
+		argCount++
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // formatToolArgs formats tool arguments for display.
@@ -276,4 +419,15 @@ func renderReasoningPart(part conversation.ReasoningPart, width int) string {
 
 	prefix := reasoningStyle.Render("  [thinking] ")
 	return prefix + reasoningStyle.Render(truncateString(content, width-15))
+}
+
+// truncateString truncates a string to the specified length with ellipsis if needed.
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return "..."
+	}
+	return s[:maxLen-3] + "..."
 }

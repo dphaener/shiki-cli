@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -252,14 +253,21 @@ func (o *ChatSpecifyOrchestrator) SendMessage(userMessage string) (<-chan Messag
 									toolCalls++
 									displayName := strings.TrimPrefix(content.Name, "mcp__")
 
+									// Parse tool arguments for rich display
+									var argsMap map[string]interface{}
+									if len(content.Input) > 0 {
+										_ = json.Unmarshal(content.Input, &argsMap)
+									}
+
 									// Add tool call part to message
-									toolCallPart := conversation.NewToolCallPart(content.ID, displayName, nil)
+									toolCallPart := conversation.NewToolCallPart(content.ID, displayName, argsMap)
 									o.messageSvc.AddPart(o.ctx, assistantMsg.ID, toolCallPart)
 
 									// Send legacy update
 									updateChan <- MessageUpdate{
 										Type:    "tool_use",
 										Content: displayName,
+										Args:    argsMap,
 									}
 								}
 							}

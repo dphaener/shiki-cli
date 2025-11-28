@@ -180,11 +180,12 @@ func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.chatView.AddOrUpdateAssistantMessage(m.responseBuffer, true)
 
 		case "tool_use":
-			// Show tool use immediately
+			// Show tool use immediately with rich args
 			toolMsg := types.ChatMessage{
 				Role:      "tool",
 				Content:   msg.update.Content,
 				Timestamp: time.Now(),
+				Args:      msg.update.Args,
 			}
 			m.chatView.AddToolUse(toolMsg)
 

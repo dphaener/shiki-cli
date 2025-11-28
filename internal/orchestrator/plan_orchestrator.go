@@ -331,8 +331,11 @@ func (o *PlanOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate
 
 									// Extract and format tool arguments
 									var argsStr string
+									var argsMap map[string]interface{}
 									if len(content.Input) > 0 {
 										argsStr = string(content.Input)
+										// Also parse as map for rich display
+										_ = json.Unmarshal(content.Input, &argsMap)
 									}
 
 									// Track this tool use for error context
@@ -348,6 +351,7 @@ func (o *PlanOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate
 									updateChan <- MessageUpdate{
 										Type:    "tool_use",
 										Content: content.Name,
+										Args:    argsMap,
 									}
 								default:
 									logger.log("Unknown content block type: %T", block)

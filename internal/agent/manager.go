@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -217,13 +218,22 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 								// Strip mcp__ prefix for cleaner display
 								displayName := strings.TrimPrefix(content.Name, "mcp__collaboration__")
 
-								// Emit ToolInvoked event for TUI
+								// Parse tool arguments from JSON input
+								var toolArgs map[string]interface{}
+								if len(content.Input) > 0 {
+									if err := json.Unmarshal(content.Input, &toolArgs); err != nil {
+										// If unmarshal fails, store raw as string
+										toolArgs = map[string]interface{}{"_raw": string(content.Input)}
+									}
+								}
+
+								// Emit ToolInvoked event for TUI with parsed args
 								m.eventBus.Publish(events.NewToolInvoked(
 									displayName,
 									agentID,
 									m.sessionID,
 									turnNumber,
-									nil, // We could parse content.Input if needed
+									toolArgs,
 								))
 							}
 						}

@@ -134,6 +134,7 @@ func (m ImplementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Role:      "tool",
 				Content:   msg.update.Content,
 				Timestamp: time.Now(),
+				Args:      msg.update.Args,
 			}
 			m.chatView.AddToolUse(toolMsg)
 

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/darinhaener/collab/internal/broker"
 	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/internal/tui/components"
 	"github.com/darinhaener/collab/pkg/types"
@@ -17,6 +18,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case eventMsg:
 		return m.handleEvent(msg.event)
+
+	case brokerEventMsg:
+		return m.handleBrokerEvent(msg.event)
 
 	case fileContentMsg:
 		m.fileContent = msg.content
@@ -260,12 +264,14 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 			m.toolActivity = m.toolActivity[len(m.toolActivity)-50:]
 		}
 
-		// Also add to agent output pane
+		// Add to agent output pane with rich tool information
 		if agentState, exists := m.agentOutputs[payload.AgentID]; exists {
 			entry := components.OutputEntry{
 				Type:      components.OutputTypeToolUse,
 				Content:   payload.ToolName,
 				Timestamp: event.Timestamp.Format("15:04:05"),
+				Turn:      agentState.CurrentTurn,
+				Args:      payload.Args, // Pass tool arguments for rich display
 			}
 			agentState.Outputs = append(agentState.Outputs, entry)
 			// AutoScroll will automatically show new content when enabled
@@ -316,6 +322,48 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleBrokerEvent processes typed broker events for tool chain management
+func (m Model) handleBrokerEvent(event broker.Event) (tea.Model, tea.Cmd) {
+	switch event := event.(type) {
+	case broker.ToolStartedEvent:
+		// Process tool started event with tool chain manager
+		if m.toolChainManager != nil {
+			chain := m.toolChainManager.ProcessToolStarted(event)
+			if chain != nil {
+				// Update conversation message parts if chain has replaced tools
+				m.updateMessagePartChainInfo(event.MessageID, event.ToolCallID, chain)
+			}
+		}
+
+	case broker.ToolCompletedEvent:
+		// Process tool completed event with tool chain manager
+		if m.toolChainManager != nil {
+			chain := m.toolChainManager.ProcessToolCompleted(event)
+			if chain != nil {
+				// Update tool call status in conversation message
+				m.updateMessagePartStatus(event.MessageID, event.ToolCallID, event.IsError)
+			}
+		}
+
+	case broker.TurnCompletedEvent:
+		// Clean up tool chains at turn boundaries
+		if m.toolChainManager != nil {
+			m.toolChainManager.ProcessTurnCompleted(event.Turn)
+		}
+
+	default:
+		// Ignore other broker events for now
+	}
+
+	// Continue listening for broker events if subscription is active
+	var cmd tea.Cmd
+	if m.brokerSub != nil && m.session.Status == types.SessionRunning {
+		cmd = waitForBrokerEvent(m.brokerSub)
+	}
+
+	return m, cmd
+}
+
 // Helper functions
 func max(a, b int) int {
 	if a > b {
@@ -338,4 +386,27 @@ type pauseError struct {
 
 func (e *pauseError) Error() string {
 	return e.msg
+}
+
+// updateMessagePartChainInfo updates tool chain information for a tool call in the conversation
+func (m *Model) updateMessagePartChainInfo(messageID, toolCallID string, chain *components.ToolChain) {
+	// Find the participant's message and update the tool call's chain info
+	for _, agentState := range m.agentOutputs {
+		// Note: This is a simplified approach. In a full implementation,
+		// we'd need to properly integrate with the conversation.Message system
+		// For now, we ensure that tool chain state is maintained in the ToolChainManager
+		_ = agentState // unused for now
+	}
+
+	// The tool chain manager maintains the authoritative state
+	// UI components will query it during rendering
+}
+
+// updateMessagePartStatus updates the status of a tool call in the conversation
+func (m *Model) updateMessagePartStatus(messageID, toolCallID string, isError bool) {
+	// Similar to above - the ToolChainManager maintains the state
+	// and the rendering system will query it for display
+
+	// In a more complete implementation, we would also update any
+	// conversation.Message instances stored in the model
 }

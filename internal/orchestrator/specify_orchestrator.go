@@ -134,8 +134,9 @@ func (o *SpecifyOrchestrator) Initialize() error {
 
 // MessageUpdate represents a streaming update from the agent
 type MessageUpdate struct {
-	Type    string // "text", "tool_use", "complete"
-	Content string
+	Type    string                 // "text", "tool_use", "complete"
+	Content string                 // Text content or tool name
+	Args    map[string]interface{} // Tool arguments (for tool_use type)
 }
 
 // maxRetries is the maximum number of times to retry on timeout
@@ -479,8 +480,11 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 
 									// Extract and format tool arguments
 									var argsStr string
+									var argsMap map[string]interface{}
 									if len(content.Input) > 0 {
 										argsStr = string(content.Input)
+										// Also parse as map for rich display
+										_ = json.Unmarshal(content.Input, &argsMap)
 									}
 
 									// Track this tool use for error context
@@ -496,6 +500,7 @@ func (o *SpecifyOrchestrator) SendMessage(userMessage string) (<-chan MessageUpd
 									updateChan <- MessageUpdate{
 										Type:    "tool_use",
 										Content: content.Name,
+										Args:    argsMap,
 									}
 								default:
 									logger.log("Unknown content block type: %T", block)

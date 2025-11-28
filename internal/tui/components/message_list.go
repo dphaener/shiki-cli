@@ -68,6 +68,11 @@ var (
 
 // RenderMessageList renders a participant's message list pane.
 func RenderMessageList(state *MessageListState, width, height int, isActive bool) string {
+	return RenderMessageListWithChainManager(state, width, height, isActive, nil)
+}
+
+// RenderMessageListWithChainManager renders a participant's message list pane with tool chain awareness.
+func RenderMessageListWithChainManager(state *MessageListState, width, height int, isActive bool, chainManager *ToolChainManager) string {
 	// Determine border style based on active state
 	borderStyle := paneBorderStyle
 	if isActive {
@@ -79,7 +84,7 @@ func RenderMessageList(state *MessageListState, width, height int, isActive bool
 
 	// Build message content
 	contentHeight := height - 7 // Account for borders, header (3 lines), and padding
-	content := buildMessageListContent(state, width-4, contentHeight)
+	content := buildMessageListContentWithChainManager(state, width-4, contentHeight, chainManager)
 
 	// Combine header and content
 	paneContent := lipgloss.JoinVertical(lipgloss.Left, header, content)
@@ -146,6 +151,11 @@ func buildMessageListHeader(state *MessageListState) string {
 
 // buildMessageListContent creates the scrollable message content.
 func buildMessageListContent(state *MessageListState, width, height int) string {
+	return buildMessageListContentWithChainManager(state, width, height, nil)
+}
+
+// buildMessageListContentWithChainManager creates the scrollable message content with tool chain awareness.
+func buildMessageListContentWithChainManager(state *MessageListState, width, height int, chainManager *ToolChainManager) string {
 	if len(state.Messages) == 0 && !state.IsStreaming {
 		return messageListMetadataStyle.Render("  Waiting for activity...")
 	}
@@ -159,8 +169,8 @@ func buildMessageListContent(state *MessageListState, width, height int) string 
 			allRenderedLines = append(allRenderedLines, separator)
 		}
 
-		// Render message parts
-		msgLines := renderMessage(msg, width)
+		// Render message parts with chain awareness
+		msgLines := renderMessageWithChainManager(msg, width, chainManager)
 		allRenderedLines = append(allRenderedLines, msgLines...)
 	}
 
@@ -246,10 +256,15 @@ func buildMessageListContent(state *MessageListState, width, height int) string 
 
 // renderMessage renders all parts of a message.
 func renderMessage(msg *conversation.Message, width int) []string {
+	return renderMessageWithChainManager(msg, width, nil)
+}
+
+// renderMessageWithChainManager renders all parts of a message with tool chain awareness.
+func renderMessageWithChainManager(msg *conversation.Message, width int, chainManager *ToolChainManager) []string {
 	var lines []string
 
 	for _, part := range msg.Parts {
-		rendered := RenderPart(part, width)
+		rendered := RenderPartWithChainManager(part, width, chainManager)
 		if rendered != "" {
 			partLines := strings.Split(rendered, "\n")
 			lines = append(lines, partLines...)

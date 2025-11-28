@@ -35,9 +35,10 @@ type SpecifySession struct {
 
 // ChatMessage represents a single chat message in the specification workflow
 type ChatMessage struct {
-	Role      string    `json:"role"` // "user" or "assistant"
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
+	Role      string                 `json:"role"` // "user", "assistant", or "tool"
+	Content   string                 `json:"content"`
+	Timestamp time.Time              `json:"timestamp"`
+	Args      map[string]interface{} `json:"args,omitempty"` // Tool arguments for rich display
 }
 
 // SpecifyEventType identifies specify-specific events

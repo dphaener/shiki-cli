@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
+	"github.com/darinhaener/collab/internal/broker"
 	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/internal/tui/components"
 	"github.com/darinhaener/collab/pkg/types"
@@ -38,6 +39,10 @@ type Model struct {
 	eventSub     *events.Subscriber
 	workspaceDir string
 	toolActivity []ToolActivity // Recent tool invocations
+
+	// Tool chain management
+	toolChainManager *components.ToolChainManager // Manages smart tool rollup behavior
+	brokerSub        *broker.Subscription         // Subscription to broker events
 
 	// Agent output tracking
 	agentOutputs  map[string]*components.AgentOutputState // Agent ID -> output state
@@ -117,30 +122,51 @@ func NewModel(session *types.Session, bus *events.EventBus) Model {
 	}
 
 	return Model{
-		session:       session,
-		turnHistory:   session.TurnHistory,
-		currentFile:   currentFile,
-		fileList:      fileList,
-		eventSub:      sub,
-		workspaceDir:  session.WorkspaceDir,
-		toolActivity:  make([]ToolActivity, 0),
-		agentOutputs:  agentOutputs,
-		activeAgents:  activeAgents,
-		selectedAgent: 0,
-		viewMode:      ViewModeAgents,
-		selectedPane:  "turns",
-		selectedTurn:  len(session.TurnHistory) - 1,
-		selectedFile:  indexOf(fileList, currentFile),
+		session:          session,
+		turnHistory:      session.TurnHistory,
+		currentFile:      currentFile,
+		fileList:         fileList,
+		eventSub:         sub,
+		workspaceDir:     session.WorkspaceDir,
+		toolActivity:     make([]ToolActivity, 0),
+		toolChainManager: components.NewToolChainManager(),
+		brokerSub:        nil, // Will be set via SetBroker when available
+		agentOutputs:     agentOutputs,
+		activeAgents:     activeAgents,
+		selectedAgent:    0,
+		viewMode:         ViewModeAgents,
+		selectedPane:     "turns",
+		selectedTurn:     len(session.TurnHistory) - 1,
+		selectedFile:     indexOf(fileList, currentFile),
 	}
+}
+
+// SetBroker sets up the broker subscription for tool events.
+// This allows gradual migration from the legacy event system.
+func (m *Model) SetBroker(b *broker.Broker) {
+	if m.brokerSub != nil {
+		m.brokerSub.Close()
+	}
+
+	// Subscribe to tool and turn events for the tool chain manager
+	events := append(broker.ToolEventFilter(), broker.EventTurnCompleted)
+	m.brokerSub = b.Subscribe("tui-tool-chain", events...)
 }
 
 // Init initializes the model (Bubbletea lifecycle)
 func (m Model) Init() tea.Cmd {
 	// Start listening for events and load initial file content
-	return tea.Batch(
+	cmds := []tea.Cmd{
 		waitForEvent(m.eventSub),
 		loadFileContent(m.workspaceDir, m.currentFile),
-	)
+	}
+
+	// Add broker event listener if broker is set up
+	if m.brokerSub != nil {
+		cmds = append(cmds, waitForBrokerEvent(m.brokerSub))
+	}
+
+	return tea.Batch(cmds...)
 }
 
 // waitForEvent waits for an event from the EventBus
@@ -148,6 +174,14 @@ func waitForEvent(sub *events.Subscriber) tea.Cmd {
 	return func() tea.Msg {
 		event := <-sub.Events()
 		return eventMsg{event}
+	}
+}
+
+// waitForBrokerEvent waits for an event from the Broker
+func waitForBrokerEvent(sub *broker.Subscription) tea.Cmd {
+	return func() tea.Msg {
+		event := <-sub.Events()
+		return brokerEventMsg{event}
 	}
 }
 
@@ -262,6 +296,10 @@ func indexOf(slice []string, item string) int {
 // Messages for Bubbletea message passing
 type eventMsg struct {
 	event events.Event
+}
+
+type brokerEventMsg struct {
+	event broker.Event
 }
 
 type fileContentMsg struct {

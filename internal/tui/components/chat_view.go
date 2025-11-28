@@ -347,28 +347,34 @@ func (c *ChatView) renderMessage(msg types.ChatMessage) string {
 		return prefix + " " + content
 
 	case "tool":
-		// Tool use messages: styled with icon and tool name
+		// Tool use messages: styled with icon, tool name, and rich parameters
 		toolIcon := lipgloss.NewStyle().
 			Foreground(theme.Info).
 			Bold(true).
 			Render("▶")
-
-		toolLabel := lipgloss.NewStyle().
-			Foreground(theme.TextMuted).
-			Render("Tool:")
 
 		toolName := lipgloss.NewStyle().
 			Foreground(theme.Info).
 			Bold(true).
 			Render(msg.Content)
 
-		timestampStyle := lipgloss.NewStyle().
-			Foreground(theme.TextMuted).
-			Render(fmt.Sprintf("(%s)", timestamp))
+		// Build rich parameter display
+		params := buildToolParams(msg.Content, msg.Args, c.width-20)
+		var paramsStyled string
+		if params != "" {
+			paramsStyled = lipgloss.NewStyle().
+				Foreground(theme.TextMuted).
+				Render(params)
+		}
 
+		if paramsStyled != "" {
+			return lipgloss.NewStyle().
+				Padding(0, 2).
+				Render(fmt.Sprintf("%s %s %s", toolIcon, toolName, paramsStyled))
+		}
 		return lipgloss.NewStyle().
 			Padding(0, 2).
-			Render(fmt.Sprintf("%s %s %s %s", toolIcon, toolLabel, toolName, timestampStyle))
+			Render(fmt.Sprintf("%s %s", toolIcon, toolName))
 
 	case "error":
 		// Error messages: styled with warning icon and red text
