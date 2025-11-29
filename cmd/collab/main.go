@@ -99,6 +99,7 @@ when both agents reach consensus on a deliverable.`,
 	rootCmd.AddCommand(cli.NewSpecifyCommand())
 	rootCmd.AddCommand(cli.NewPlanCommand())
 	rootCmd.AddCommand(cli.NewFeatureCommand())
+	rootCmd.AddCommand(cli.NewBugCommand())
 	rootCmd.AddCommand(cli.NewVersionCommand(version, commit, buildDate))
 	rootCmd.AddCommand(newCompletionCommand())
 

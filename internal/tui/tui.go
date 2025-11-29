@@ -170,3 +170,41 @@ func RunWorkflowMode(session *types.WorkflowSession) error {
 
 	return nil
 }
+
+// RunBugMode starts the TUI in bug fix workflow mode
+func RunBugMode(session *types.BugSession) error {
+	if session == nil {
+		return fmt.Errorf("bug session cannot be nil")
+	}
+
+	// Create event bus for assistant logging
+	bus := events.NewEventBus(100)
+	defer bus.Shutdown()
+
+	// Start assistant event logger
+	assistantLogger, err := logging.NewAssistantEventLogger()
+	if err == nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		assistantLogger.Start(ctx, bus)
+		defer assistantLogger.Close()
+	}
+
+	// Create bug model
+	model := NewBugModel(session, bus)
+
+	// Create Bubbletea program
+	p := tea.NewProgram(
+		model,
+		tea.WithAltScreen(),       // Use alternate screen buffer
+		tea.WithMouseCellMotion(), // Enable mouse support
+	)
+
+	// Run the program
+	_, err = p.Run()
+	if err != nil {
+		return fmt.Errorf("bug TUI error: %w", err)
+	}
+
+	return nil
+}

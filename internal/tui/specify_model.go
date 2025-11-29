@@ -15,7 +15,6 @@ import (
 	"github.com/darinhaener/collab/pkg/types"
 )
 
-
 // PaneType represents which pane is currently active
 type PaneType int
 
@@ -32,53 +31,102 @@ const (
 	messageClearShortcut = "ctrl+u"
 )
 
-// SpecifyModel manages the specify mode TUI
+// SpecifyModel manages the specify mode TUI.
+// It wraps PhaseModel with specify-specific configuration.
 type SpecifyModel struct {
-	session           *types.SpecifySession
-	orchestrator      *orchestrator.SpecifyOrchestrator
-	eventBus          *events.EventBus
-	chatView          components.ChatView
-	specPreview       components.SpecPreview
-	width             int
-	height            int
-	ready             bool
-	quitting          bool
-	waitingForAI      bool
-	err               error
-	responseBuffer    string // Buffer for accumulating assistant response
-	activeUpdateChan  <-chan orchestrator.MessageUpdate
-	activeErrorChan   <-chan error
-	activePane        PaneType // Which pane is currently active
-	layoutCache       LayoutCache
-	// Interrupt state tracking for enhanced keyboard handling
-	interruptRequested bool      // Track if user requested interruption
-	lastInterruptTime  time.Time // Prevent accidental double-interrupts
-	lastEscTime        time.Time // Track last ESC press for double-ESC clear
+	*PhaseModel
+	session     *types.SpecifySession
+	specPreview *components.SpecPreview
+}
+
+// specPreviewWrapper wraps SpecPreview to implement PreviewUpdater
+type specPreviewWrapper struct {
+	preview *components.SpecPreview
+}
+
+func (w *specPreviewWrapper) Init() tea.Cmd {
+	return w.preview.Init()
+}
+
+func (w *specPreviewWrapper) View() string {
+	return w.preview.View()
+}
+
+func (w *specPreviewWrapper) SetSize(width, height int) {
+	w.preview.SetSize(width, height)
+}
+
+func (w *specPreviewWrapper) SetContent(content string) {
+	w.preview.SetContent(content)
+}
+
+func (w *specPreviewWrapper) UpdatePreview(msg tea.Msg) tea.Cmd {
+	updated, cmd := w.preview.Update(msg)
+	*w.preview = updated
+	return cmd
 }
 
 // NewSpecifyModel creates a new specify model
 func NewSpecifyModel(session *types.SpecifySession, eventBus *events.EventBus) SpecifyModel {
-	// Initialize with default sizes - will be updated on first WindowSizeMsg
-	chatView := components.NewChatView(80, 24)
 	specPreview := components.NewSpecPreview(80, 24)
+	previewWrapper := &specPreviewWrapper{preview: &specPreview}
 
-	return SpecifyModel{
+	// Create the orchestrator
+	apiKey := orchestrator.GetAPIKey()
+	orch := orchestrator.NewSpecifyOrchestrator(session, apiKey, eventBus)
+
+	// Create the model first (we need it for closure references)
+	model := &SpecifyModel{
 		session:     session,
-		eventBus:    eventBus,
-		chatView:    chatView,
-		specPreview: specPreview,
-		ready:       false,
-		activePane:  ChatPane, // Start with chat pane active
+		specPreview: &specPreview,
 	}
+
+	// Create the phase model config
+	config := PhaseModelConfig{
+		PhaseType:    PhaseSpecify,
+		Title:        fmt.Sprintf("Collab Specify: %s", session.FriendlyName),
+		PreviewTitle: "Specification Preview",
+		SubtitleFunc: func() string {
+			return fmt.Sprintf("Feature #%03d - %s - Phase: %s",
+				session.FeatureNumber,
+				session.Slug,
+				session.Phase,
+			)
+		},
+		InitialPromptFunc: func() string {
+			if session.FeatureDesc != "" {
+				return fmt.Sprintf("I want to create a feature: %s", session.FeatureDesc)
+			}
+			return "Hello, I'd like to specify a new feature."
+		},
+		RefreshPreviewFunc: func() {
+			model.refreshSpecPreviewFromFile()
+		},
+		OnToolUseFunc: func(toolName string, args map[string]interface{}) {
+			// Refresh preview after tool use - agent may have written spec
+			model.refreshSpecPreviewFromFile()
+		},
+		GetChatHistoryFunc: func() []types.ChatMessage {
+			return session.ChatHistory
+		},
+		AppendChatHistoryFunc: func(msg types.ChatMessage) {
+			session.ChatHistory = append(session.ChatHistory, msg)
+		},
+		LoadingStateLabel: "specify",
+	}
+
+	// Create the PhaseModel
+	model.PhaseModel = NewPhaseModel(config, orch, previewWrapper, eventBus)
+
+	return *model
 }
 
 // Init implements tea.Model
 func (m SpecifyModel) Init() tea.Cmd {
 	return tea.Batch(
-		tea.EnterAltScreen, // Enter alt screen FIRST to isolate from terminal
-		m.chatView.Init(),
-		m.specPreview.Init(),
-		initializeAgent(m.session, m.eventBus),
+		tea.EnterAltScreen,
+		m.PhaseModel.Init(),
+		initializeAgent(m.session, m.PhaseModel.eventBus),
 	)
 }
 
@@ -96,527 +144,36 @@ func initializeAgent(session *types.SpecifySession, eventBus *events.EventBus) t
 	}
 }
 
-// clearInputAfterDelay returns a cmd that clears input after a brief delay
-func clearInputAfterDelay() tea.Cmd {
-	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
-		return clearInputMsg{}
-	})
-}
-
-// clearInputMsg signals to clear the input field
-type clearInputMsg struct{}
-
 // Update implements tea.Model
 func (m SpecifyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-
+	// Handle specify-specific messages first
 	switch msg := msg.(type) {
 	case AgentInitializedMsg:
-		m.orchestrator = msg.Orchestrator
-		// Handle initialization based on whether description was provided
-		if len(m.session.ChatHistory) == 0 {
-			if m.session.FeatureDesc != "" {
-				// WITH DESCRIPTION: Auto-start discovery with the feature description
-				return m, m.autoStartDiscovery()
-			} else {
-				// NO DESCRIPTION: Let AI initiate the conversation
-				return m, m.letAIInitiate()
-			}
-		}
-		return m, nil
+		// Replace the orchestrator in PhaseModel
+		m.PhaseModel.orchestrator = msg.Orchestrator
+		// Signal that agent is ready
+		return m, func() tea.Msg { return PhaseAgentReadyMsg{} }
 
 	case AgentErrorMsg:
-		// Show error inline in chat instead of replacing entire view
-		m.chatView.AddError(msg.Err)
-		m.waitingForAI = false
-		m.chatView.ClearLoadingState()
-		m.activeUpdateChan = nil
-		m.activeErrorChan = nil
-		// Also store for potential full-screen error display
-		m.err = msg.Err
-		return m, nil
-
-	case AgentResponseMsg:
-		// Add assistant message to chat
-		assistantMsg := types.ChatMessage{
-			Role:      "assistant",
-			Content:   msg.Content,
-			Timestamp: time.Now(),
-		}
-		m.session.ChatHistory = append(m.session.ChatHistory, assistantMsg)
-		m.chatView.AddMessage(assistantMsg)
-		m.waitingForAI = false
-		m.chatView.ClearLoadingState()
-		return m, nil
-
-	case AgentStreamMsg:
-		// Stream partial response (for future streaming support)
-		// For now, we'll wait for the complete message
-		return m, nil
-
-	case AgentToolUseMsg:
-		// Add tool use indicator to chat
-		toolMsg := types.ChatMessage{
-			Role:      "tool",
-			Content:   msg.ToolName,
-			Timestamp: time.Now(),
-		}
-		m.chatView.AddToolUse(toolMsg)
-		return m, nil
-
-	case agentChannelsReady:
-		// Store channels and start listening for updates
-		m.activeUpdateChan = msg.updateChan
-		m.activeErrorChan = msg.errorChan
-		return m, waitForNextUpdate(m.activeUpdateChan, m.activeErrorChan)
-
-	case agentUpdate:
-		// Process the update
-		switch msg.update.Type {
-		case "text":
-			// Accumulate text
-			m.responseBuffer += msg.update.Content
-			// Stream the text to the chat view in real-time
-			m.chatView.AddOrUpdateAssistantMessage(m.responseBuffer, true)
-
-		case "tool_use":
-			// Show tool use immediately with rich args
-			toolMsg := types.ChatMessage{
-				Role:      "tool",
-				Content:   msg.update.Content,
-				Timestamp: time.Now(),
-				Args:      msg.update.Args,
-			}
-			m.chatView.AddToolUse(toolMsg)
-
-			// Refresh preview from file - agent may have written spec
-			m.refreshSpecPreviewFromFile()
-
-		case "tool_error":
-			// Show tool error to user
-			m.chatView.AddError(fmt.Errorf("Tool failed: %s", msg.update.Content))
-
-		case "message_done":
-			// One assistant message is complete, but conversation continues
-			// Finalize current message and prepare for next one
-			if len(m.responseBuffer) > 0 {
-				assistantMsg := types.ChatMessage{
-					Role:      "assistant",
-					Content:   m.responseBuffer,
-					Timestamp: time.Now(),
-				}
-				m.session.ChatHistory = append(m.session.ChatHistory, assistantMsg)
-
-				// Check if this response contains spec content
-				m.updateSpecPreviewFromMessage(m.responseBuffer)
-
-				m.responseBuffer = ""
-			}
-			// Mark streaming as finished so next text starts a NEW message
-			m.chatView.FinishStreaming()
-			// Continue listening - don't stop!
-
-		case "complete":
-			// Final response - add to session history and update spec
-			if len(m.responseBuffer) > 0 {
-				assistantMsg := types.ChatMessage{
-					Role:      "assistant",
-					Content:   m.responseBuffer,
-					Timestamp: time.Now(),
-				}
-				m.session.ChatHistory = append(m.session.ChatHistory, assistantMsg)
-
-				// Update phase indicators based on message content
-				m.updateSpecPreviewFromMessage(m.responseBuffer)
-
-				m.responseBuffer = ""
-			}
-			// Mark streaming as finished
-			m.chatView.FinishStreaming()
-			// Refresh preview from file to show actual spec content
-			m.refreshSpecPreviewFromFile()
-			m.waitingForAI = false
-			m.chatView.ClearLoadingState()
-			m.activeUpdateChan = nil
-			m.activeErrorChan = nil
-			return m, nil
-		}
-
-		// Continue listening for more updates
-		return m, waitForNextUpdate(m.activeUpdateChan, m.activeErrorChan)
-
-	case agentStreamComplete:
-		// Stream ended - finalize response if we have one
-		if len(m.responseBuffer) > 0 {
-			assistantMsg := types.ChatMessage{
-				Role:      "assistant",
-				Content:   m.responseBuffer,
-				Timestamp: time.Now(),
-			}
-			m.session.ChatHistory = append(m.session.ChatHistory, assistantMsg)
-
-			// Update phase indicators based on message content
-			m.updateSpecPreviewFromMessage(m.responseBuffer)
-
-			m.responseBuffer = ""
-		}
-		// Mark streaming as finished
-		m.chatView.FinishStreaming()
-		// Refresh preview from file to show actual spec content
-		m.refreshSpecPreviewFromFile()
-		m.waitingForAI = false
-		m.chatView.ClearLoadingState()
-		m.activeUpdateChan = nil
-		m.activeErrorChan = nil
-		return m, nil
-
-	case clearInputMsg:
-		// Clear input field to remove any late-arriving escape sequences
-		m.chatView.ClearInput()
-		return m, nil
-
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-
-		// Invalidate layout cache since window size changed
-		m.invalidateLayoutCache()
-
-		// Update layout cache with new dimensions
-		m.updateLayoutCache()
-
-		// Available height for content using cached heights
-		availableHeight := msg.Height - m.layoutCache.HeaderHeight - m.layoutCache.FooterHeight
-		if availableHeight < 5 {
-			availableHeight = 5 // Minimum
-		}
-
-		// Split width: 60% chat, 40% preview
-		chatWidth := int(float64(msg.Width) * 0.6)
-		previewWidth := msg.Width - chatWidth
-
-		// Account for pane borders (2) + padding (2) = 4 total for both width and height
-		m.chatView.SetSize(chatWidth-4, availableHeight-4)
-		m.specPreview.SetSize(previewWidth-4, availableHeight-4)
-
-		if !m.ready {
-			m.ready = true
-			// Only add welcome message if we haven't auto-started discovery
-			if len(m.session.ChatHistory) == 0 {
-				hasDescription := m.session.FeatureDesc != ""
-				m.chatView.AddWelcomeMessage(m.session.FriendlyName, hasDescription)
-			}
-			// Clear any escape sequences that leaked into textarea
-			m.chatView.ClearInput()
-			// Schedule one more clear after a brief delay to catch any late terminal responses
-			cmds = append(cmds, clearInputAfterDelay())
-		}
-
-	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyCtrlC:
-			// Ctrl+C always quits
-			m.quitting = true
-			// Cleanup orchestrator
-			if m.orchestrator != nil {
-				_ = m.orchestrator.Stop()
-			}
-			return m, tea.Quit
-
-		case tea.KeyEsc:
-			now := time.Now()
-			if m.waitingForAI && m.orchestrator != nil {
-				// ESC interrupts agent if waiting
-				m.interruptRequested = true
-				m.lastInterruptTime = now
-				m.waitingForAI = false
-				m.chatView.ClearLoadingState()
-				m.activeUpdateChan = nil
-				m.activeErrorChan = nil
-
-				// Add immediate visual feedback
-				m.chatView.AddMessage(types.ChatMessage{
-					Role:      "assistant",
-					Content:   "Interrupting...",
-					Timestamp: now,
-				})
-
-				// Re-focus the chat input to ensure it remains responsive
-				if m.activePane == ChatPane {
-					cmd := m.chatView.Focus()
-					cmds = append(cmds, cmd)
-				}
-
-				// Call interrupt asynchronously to avoid blocking UI
-				go func() {
-					_ = m.orchestrator.Interrupt()
-				}()
-			} else if m.activePane == ChatPane {
-				// Double-ESC clears input when not waiting for AI
-				if now.Sub(m.lastEscTime) < doubleEscapeTimeout {
-					m.chatView.ClearInput()
-					m.lastEscTime = time.Time{} // Reset to prevent triple-ESC
-				} else {
-					m.lastEscTime = now
-				}
-			}
-			return m, tea.Batch(cmds...)
-
-		case tea.KeyTab:
-			// Switch between panes
-			if m.activePane == ChatPane {
-				m.activePane = PreviewPane
-				// Blur chat textarea when switching away
-				m.chatView.Blur()
-			} else {
-				m.activePane = ChatPane
-				// Focus chat textarea when switching to it
-				cmd := m.chatView.Focus()
-				cmds = append(cmds, cmd)
-			}
-			return m, tea.Batch(cmds...)
-
-		case tea.KeyEnter:
-			// Handle Enter key for sending messages
-			if m.activePane == ChatPane {
-				input := m.chatView.GetInput()
-				if input != "" {
-					// Only send message if there's actual content
-					// Multi-line input is handled by the textarea itself when Shift+Enter is pressed
-					return m, m.sendMessage(input)
-				}
-			}
-		}
+		return m, func() tea.Msg { return PhaseAgentErrorMsg{Err: msg.Err} }
 	}
 
-	// Route keyboard events to the active pane
-	if m.activePane == ChatPane {
-		// Update chat view (handles viewport scrolling and textarea input)
-		var chatCmd tea.Cmd
-		m.chatView, chatCmd = m.chatView.Update(msg)
-		cmds = append(cmds, chatCmd)
-	} else {
-		// Update spec preview (handles viewport scrolling)
-		var previewCmd tea.Cmd
-		m.specPreview, previewCmd = m.specPreview.Update(msg)
-		cmds = append(cmds, previewCmd)
-	}
+	// Delegate to PhaseModel
+	updatedModel, cmd := m.PhaseModel.Update(msg)
+	m.PhaseModel = updatedModel.(*PhaseModel)
 
-	return m, tea.Batch(cmds...)
+	return m, cmd
 }
 
 // View implements tea.Model
 func (m SpecifyModel) View() string {
-	// Only show full-screen error if not ready yet (critical init failure)
-	// Once ready, errors are shown inline in the chat
-	if m.err != nil && !m.ready {
-		return errorStyle.Render(fmt.Sprintf("Error: %v", m.err))
-	}
-
-	if m.quitting {
-		return quitMessageStyle.Render("Goodbye!")
-	}
-
-	if !m.ready {
-		return "Initializing..."
-	}
-
-	// Render components and cache heights
-	header := m.renderHeader()
-	footer := m.renderFooter()
-	m.layoutCache.HeaderHeight = lipgloss.Height(header)
-	m.layoutCache.FooterHeight = lipgloss.Height(footer)
-	m.layoutCache.LastWidth = m.width
-	m.layoutCache.LastHeight = m.height
-	m.layoutCache.Dirty = false
-
-	// Calculate available height using cached heights
-	availableHeight := m.height - m.layoutCache.HeaderHeight - m.layoutCache.FooterHeight
-
-	// Split panes: 60% chat, 40% preview
-	chatWidth := int(float64(m.width) * 0.6)
-	previewWidth := m.width - chatWidth
-
-	// Render panes with proper sizing
-	chatPane := m.renderPane(
-		"Chat",
-		m.chatView.View(),
-		chatWidth,
-		availableHeight,
-		m.activePane == ChatPane, // Active if ChatPane is selected
-	)
-
-	previewPane := m.renderPane(
-		"Specification Preview",
-		m.specPreview.View(),
-		previewWidth,
-		availableHeight,
-		m.activePane == PreviewPane, // Active if PreviewPane is selected
-	)
-
-	// Join panes horizontally
-	content := lipgloss.JoinHorizontal(lipgloss.Top, chatPane, previewPane)
-
-	// Join everything vertically and let lipgloss handle sizing
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		header,
-		content,
-		footer,
-	)
+	return m.PhaseModel.View()
 }
 
 // ViewContent returns just the content without header/footer for embedding in workflow
 func (m SpecifyModel) ViewContent() string {
-	if m.err != nil && !m.ready {
-		return errorStyle.Render(fmt.Sprintf("Error: %v", m.err))
-	}
-
-	if m.quitting {
-		return quitMessageStyle.Render("Goodbye!")
-	}
-
-	if !m.ready {
-		return "Initializing..."
-	}
-
-	// Update layout cache if needed using optimized approach
-	m.updateLayoutCache()
-
-	// Calculate available height using cached heights
-	availableHeight := m.height - m.layoutCache.HeaderHeight - m.layoutCache.FooterHeight
-
-	// Split panes: 60% chat, 40% preview
-	chatWidth := int(float64(m.width) * 0.6)
-	previewWidth := m.width - chatWidth
-
-	// Render panes with proper sizing
-	chatPane := m.renderPane(
-		"Chat",
-		m.chatView.View(),
-		chatWidth,
-		availableHeight,
-		m.activePane == ChatPane, // Active if ChatPane is selected
-	)
-
-	previewPane := m.renderPane(
-		"Specification Preview",
-		m.specPreview.View(),
-		previewWidth,
-		availableHeight,
-		m.activePane == PreviewPane, // Active if PreviewPane is selected
-	)
-
-	// Return just the content (panes) without header/footer
-	return lipgloss.JoinHorizontal(lipgloss.Top, chatPane, previewPane)
+	return m.PhaseModel.ViewContent()
 }
-
-// renderHeader renders the TUI header
-func (m *SpecifyModel) renderHeader() string {
-	title := fmt.Sprintf("Collab Specify: %s", m.session.FriendlyName)
-	subtitle := fmt.Sprintf("Feature #%03d - %s - Phase: %s",
-		m.session.FeatureNumber,
-		m.session.Slug,
-		m.session.Phase,
-	)
-
-	headerContent := lipgloss.JoinVertical(
-		lipgloss.Left,
-		titleStyle.Render(title),
-		subtitleStyle.Render(subtitle),
-	)
-
-	return headerBoxStyle.Width(m.width).Render(headerContent)
-}
-
-// renderFooter renders the TUI footer with keyboard shortcuts
-func (m *SpecifyModel) renderFooter() string {
-	var shortcuts []string
-
-	if m.activePane == ChatPane {
-		shortcuts = []string{
-			"Enter: Send",
-			"Shift+Enter: New Line",
-			"Esc×2: Clear",
-			"Tab: Switch to Preview",
-			"↑/↓/PgUp/PgDn: Scroll",
-			"Esc: Interrupt",
-			"Ctrl+C: Quit",
-		}
-	} else {
-		shortcuts = []string{
-			"Tab: Switch to Chat",
-			"↑/↓/PgUp/PgDn: Scroll",
-			"Ctrl+C: Quit",
-		}
-	}
-
-	// Render footer without loading state (moved to ChatView)
-	footer := footerStyle.Render(strings.Join(shortcuts, " • "))
-	return footerBoxStyle.Width(m.width).Render(footer)
-}
-
-// renderPane renders a pane with border and title
-func (m *SpecifyModel) renderPane(title, content string, width, height int, active bool) string {
-	borderStyle := specifyPaneBorderStyle
-	if active {
-		borderStyle = specifySelectedPaneBorderStyle
-	}
-
-	// Use MaxWidth and MaxHeight instead of fixed Width/Height for better flexibility
-	paneStyle := borderStyle.
-		MaxWidth(width).
-		MaxHeight(height).
-		Width(width - 2).  // Account for borders
-		Height(height - 2) // Account for borders
-
-	return paneStyle.Render(content)
-}
-
-// startAgentStreaming initiates the agent query and returns channels
-func startAgentStreaming(orch *orchestrator.SpecifyOrchestrator, input string) tea.Cmd {
-	return func() tea.Msg {
-		updateChan, errorChan := orch.SendMessage(input)
-		return agentChannelsReady{
-			updateChan: updateChan,
-			errorChan:  errorChan,
-		}
-	}
-}
-
-// waitForNextUpdate waits for the next message from the agent
-func waitForNextUpdate(updateChan <-chan orchestrator.MessageUpdate, errorChan <-chan error) tea.Cmd {
-	return func() tea.Msg {
-		select {
-		case update, ok := <-updateChan:
-			if !ok {
-				// Channel closed
-				return agentStreamComplete{}
-			}
-			return agentUpdate{update: update}
-
-		case err, ok := <-errorChan:
-			if ok && err != nil {
-				return AgentErrorMsg{Err: err}
-			}
-			return agentStreamComplete{}
-		}
-	}
-}
-
-// agentChannelsReady signals that streaming channels are ready
-type agentChannelsReady struct {
-	updateChan <-chan orchestrator.MessageUpdate
-	errorChan  <-chan error
-}
-
-// agentUpdate carries a single update from the agent
-type agentUpdate struct {
-	update orchestrator.MessageUpdate
-}
-
-// agentStreamComplete signals that streaming is complete
-type agentStreamComplete struct{}
 
 // refreshSpecPreviewFromFile reads the spec file from disk and updates the preview
 func (m *SpecifyModel) refreshSpecPreviewFromFile() {
@@ -657,26 +214,6 @@ func stripFrontmatter(content string) string {
 	return content
 }
 
-// updateSpecPreviewFromMessage updates phase indicators based on message content
-// Note: Actual spec content is read from file via refreshSpecPreviewFromFile()
-func (m *SpecifyModel) updateSpecPreviewFromMessage(content string) {
-	// Only update phase indicators, not content (content comes from file)
-	if m.session.Phase == types.PhaseDiscovery && containsSpecSections(content) {
-		m.session.Phase = types.PhaseGeneration
-		m.specPreview.SetPhase(types.PhaseGeneration)
-	}
-}
-
-// isSpecContent checks if content looks like a specification document
-func isSpecContent(content string) bool {
-	// Check for markdown headers and spec-like structure
-	content = strings.ToLower(content)
-	return strings.Contains(content, "##") &&
-		(strings.Contains(content, "overview") ||
-			strings.Contains(content, "requirements") ||
-			strings.Contains(content, "success criteria"))
-}
-
 // containsSpecSections checks if content has multiple spec sections
 func containsSpecSections(content string) bool {
 	content = strings.ToLower(content)
@@ -688,78 +225,6 @@ func containsSpecSections(content string) bool {
 		}
 	}
 	return sectionCount >= 3
-}
-
-// autoStartDiscovery automatically starts the discovery process with the feature description
-func (m *SpecifyModel) autoStartDiscovery() tea.Cmd {
-	// Send the feature description as starting point for discovery
-	initialPrompt := fmt.Sprintf("I want to create a feature: %s", m.session.FeatureDesc)
-
-	// Add user message to chat
-	msg := types.ChatMessage{
-		Role:      "user",
-		Content:   initialPrompt,
-		Timestamp: time.Now(),
-	}
-	m.session.ChatHistory = append(m.session.ChatHistory, msg)
-	m.chatView.AddMessage(msg)
-	m.waitingForAI = true
-	m.chatView.SetLoadingState("specify")
-
-	// Send to AI agent
-	if m.orchestrator == nil {
-		return func() tea.Msg {
-			return AgentErrorMsg{Err: fmt.Errorf("agent not initialized")}
-		}
-	}
-
-	// Reset response buffer and start streaming
-	m.responseBuffer = ""
-	return startAgentStreaming(m.orchestrator, initialPrompt)
-}
-
-// letAIInitiate triggers the AI to start the conversation when no description was provided
-func (m *SpecifyModel) letAIInitiate() tea.Cmd {
-	m.waitingForAI = true
-	m.chatView.SetLoadingState("specify")
-
-	// Send to AI agent with a prompt that triggers the AI's greeting
-	if m.orchestrator == nil {
-		return func() tea.Msg {
-			return AgentErrorMsg{Err: fmt.Errorf("agent not initialized")}
-		}
-	}
-
-	// Reset response buffer and start streaming
-	// Send an empty-ish message that signals the AI to initiate
-	m.responseBuffer = ""
-	return startAgentStreaming(m.orchestrator, "Hello, I'd like to specify a new feature.")
-}
-
-// sendMessage sends a user message and triggers AI response
-func (m *SpecifyModel) sendMessage(input string) tea.Cmd {
-	// Add user message to chat
-	msg := types.ChatMessage{
-		Role:      "user",
-		Content:   input,
-		Timestamp: time.Now(),
-	}
-	m.session.ChatHistory = append(m.session.ChatHistory, msg)
-	m.chatView.AddMessage(msg)
-	m.chatView.ClearInput()
-	m.waitingForAI = true
-	m.chatView.SetLoadingState("specify")
-
-	// Send to AI agent
-	if m.orchestrator == nil {
-		return func() tea.Msg {
-			return AgentErrorMsg{Err: fmt.Errorf("agent not initialized")}
-		}
-	}
-
-	// Reset response buffer and start streaming
-	m.responseBuffer = ""
-	return startAgentStreaming(m.orchestrator, input)
 }
 
 // Message types for agent communication
@@ -789,7 +254,32 @@ type AgentErrorMsg struct {
 	Err error
 }
 
+// Legacy message types for backward compatibility
+type agentChannelsReady struct {
+	updateChan <-chan orchestrator.MessageUpdate
+	errorChan  <-chan error
+}
+
+type agentUpdate struct {
+	update orchestrator.MessageUpdate
+}
+
+type agentStreamComplete struct{}
+
+// clearInputMsg signals to clear the input field
+type clearInputMsg struct{}
+
+// Compatibility methods
+func (m *SpecifyModel) updateLayoutCache() {
+	// Layout is handled by PhaseModel
+}
+
+func (m *SpecifyModel) invalidateLayoutCache() {
+	// Layout is handled by PhaseModel
+}
+
 // Styles for specify mode using Sekkei Design System theme
+// These are kept for backward compatibility with any external references
 var (
 	titleStyle = lipgloss.NewStyle().
 			Foreground(theme.Primary).
@@ -815,14 +305,14 @@ var (
 			BorderForeground(theme.Border)
 
 	specifyPaneBorderStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(theme.Border).
-			Padding(1)
+				BorderStyle(lipgloss.RoundedBorder()).
+				BorderForeground(theme.Border).
+				Padding(1)
 
 	specifySelectedPaneBorderStyle = lipgloss.NewStyle().
-				BorderStyle(lipgloss.RoundedBorder()).
-				BorderForeground(theme.BorderActive).
-				Padding(1)
+					BorderStyle(lipgloss.RoundedBorder()).
+					BorderForeground(theme.BorderActive).
+					Padding(1)
 
 	errorStyle = lipgloss.NewStyle().
 			Foreground(theme.Error).
@@ -834,19 +324,3 @@ var (
 				Bold(true).
 				Padding(1)
 )
-
-// updateLayoutCache updates the cached header and footer heights if needed
-func (m *SpecifyModel) updateLayoutCache() {
-	if m.layoutCache.Dirty || m.width != m.layoutCache.LastWidth || m.height != m.layoutCache.LastHeight {
-		m.layoutCache.HeaderHeight = lipgloss.Height(m.renderHeader())
-		m.layoutCache.FooterHeight = lipgloss.Height(m.renderFooter())
-		m.layoutCache.LastWidth = m.width
-		m.layoutCache.LastHeight = m.height
-		m.layoutCache.Dirty = false
-	}
-}
-
-// invalidateLayoutCache marks the layout cache as dirty, requiring recalculation
-func (m *SpecifyModel) invalidateLayoutCache() {
-	m.layoutCache.Dirty = true
-}

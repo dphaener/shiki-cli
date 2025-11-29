@@ -1,498 +1,52 @@
 package orchestrator
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"strings"
 	"time"
 
-	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
 	agentpkg "github.com/darinhaener/collab/internal/agent"
 	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
-// PlanOrchestrator manages the planning workflow with a single agent
+// PlanOrchestrator manages the planning workflow with a single agent.
+// It embeds BaseOrchestrator for common functionality and adds session-specific behavior.
 type PlanOrchestrator struct {
-	session          *types.PlanSession
-	agent            *agentpkg.Agent
-	apiKey           string
-	ctx              context.Context
-	cancel           context.CancelFunc
-	planInstructions string // Instructions sent as first message to prime the agent
-	instructionsSent bool   // Whether we've sent the initial instructions
-	eventBus         *events.EventBus // Event bus for publishing assistant events
+	*BaseOrchestrator
+	session *types.PlanSession
 }
 
 // NewPlanOrchestrator creates a new plan orchestrator
 func NewPlanOrchestrator(session *types.PlanSession, apiKey string, eventBus *events.EventBus) *PlanOrchestrator {
-	ctx, cancel := context.WithCancel(context.Background())
+	base := NewBaseOrchestrator(
+		session.ID,
+		"plan",
+		3*time.Minute,
+		apiKey,
+		eventBus,
+	)
+
+	// Set session-specific event metadata
+	base.SetEventMetadata(map[string]interface{}{
+		"feature_number": session.FeatureNumber,
+		"spec_slug":      session.SpecSlug,
+	})
 
 	return &PlanOrchestrator{
-		session:  session,
-		apiKey:   apiKey,
-		ctx:      ctx,
-		cancel:   cancel,
-		eventBus: eventBus,
+		BaseOrchestrator: base,
+		session:          session,
 	}
 }
 
-// Initialize sets up the agent
+// Initialize sets up the agent for the plan phase
 func (o *PlanOrchestrator) Initialize() error {
-	// Create debug logger for initialization
-	logger := newDebugLogger()
-	defer logger.close()
-
-	logger.log("========== INITIALIZING PLAN AGENT ==========")
-	logger.log("Session ID: %s", o.session.ID)
-	logger.log("Feature: %s (#%03d)", o.session.FriendlyName, o.session.FeatureNumber)
-	logger.log("SpecSlug: %s", o.session.SpecSlug)
-	logger.log("SpecFile: %s", o.session.SpecFile)
-	logger.log("PlanFile: %s", o.session.PlanFile)
-	logger.log("ContractsDir: %s", o.session.ContractsDir)
-
 	// Create plan agent configuration - this generates the instructions
 	agentCfg := agentpkg.NewPlanAgent(o.session)
 
-	// Store instructions to send as first message
-	o.planInstructions = agentCfg.SystemPrompt
-	o.instructionsSent = false
-
-	logger.log("========== PLAN INSTRUCTIONS ==========")
-	logger.log("%s", o.planInstructions)
-	logger.log("========== END PLAN INSTRUCTIONS ==========")
-
-	// Create agent instance
-	o.agent = agentpkg.NewAgent(agentCfg)
-
-	// Start agent (built-in tools only)
-	if err := o.agent.Start(o.ctx, o.apiKey, agentCfg.ID); err != nil {
-		return fmt.Errorf("failed to start plan agent: %w", err)
-	}
-
-	logger.log("Agent started successfully")
-	return nil
+	// Delegate to BaseOrchestrator
+	return o.InitializeWithAgent(agentCfg)
 }
 
-// SendMessage sends a user message to the agent and returns streaming updates
-func (o *PlanOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate, <-chan error) {
-	updateChan := make(chan MessageUpdate, 100)
-	errorChan := make(chan error, 1)
-
-	go func() {
-		// Create debug logger
-		logger := newDebugLogger()
-		defer logger.close()
-
-		logger.log("========== NEW MESSAGE ==========")
-		logger.log("User message: %s", userMessage)
-
-		defer close(updateChan)
-		defer close(errorChan)
-
-		client := o.agent.GetClient()
-		if client == nil {
-			logger.log("ERROR: agent not initialized")
-			errorChan <- fmt.Errorf("agent not initialized")
-			return
-		}
-
-		// Build the message to send
-		messageToSend := userMessage
-
-		// If this is the first message, prepend the plan instructions
-		if !o.instructionsSent && o.planInstructions != "" {
-			logger.log("Prepending plan instructions to first message")
-			messageToSend = o.planInstructions + "\n\n---\n\n## User Request\n\n" + userMessage
-			o.instructionsSent = true
-		}
-
-		// Retry loop for handling timeouts
-		for attempt := 0; attempt <= maxRetries; attempt++ {
-			if attempt > 0 {
-				logger.log("Retry attempt %d/%d after timeout", attempt, maxRetries)
-				// Brief delay before retry
-				time.Sleep(retryDelay)
-			}
-
-			// Create query context with timeout for this attempt
-			queryCtx, cancel := context.WithTimeout(o.ctx, 3*time.Minute)
-
-			// Send query to agent
-			logger.log("Sending query to agent (message length: %d chars)...", len(messageToSend))
-			if err := client.Query(queryCtx, messageToSend); err != nil {
-				cancel()
-				logger.log("ERROR: failed to send query: %v", err)
-
-				// Publish assistant error event if eventBus is available
-				if o.eventBus != nil {
-					errorEvent := events.NewAssistantError(
-						o.session.ID,
-						"plan",
-						o.session.ID, // Using session ID as agent ID for now
-						"query_error",
-						fmt.Sprintf("Failed to send query: %v", err),
-						fmt.Sprintf("Attempt %d/%d", attempt+1, maxRetries+1),
-						"retry",
-						map[string]interface{}{
-							"feature_number": o.session.FeatureNumber,
-							"spec_slug":     o.session.SpecSlug,
-							"attempt":       attempt + 1,
-							"message_length": len(messageToSend),
-						},
-					)
-					o.eventBus.Publish(errorEvent)
-				}
-
-				errorChan <- fmt.Errorf("failed to send query: %w", err)
-				return
-			}
-			logger.log("Query sent successfully")
-
-			// Publish assistant request event if eventBus is available
-			if o.eventBus != nil {
-				assistantEvent := events.NewAssistantRequest(
-					o.session.ID,
-					"plan",
-					o.session.ID, // Using session ID as agent ID for now
-					o.session.ID, // Using session ID as conversation ID
-					messageToSend,
-					map[string]interface{}{
-						"feature_number": o.session.FeatureNumber,
-						"spec_slug":     o.session.SpecSlug,
-						"attempt":       attempt + 1,
-						"message_length": len(messageToSend),
-					},
-				)
-				o.eventBus.Publish(assistantEvent)
-			}
-
-			// Receive messages
-			msgChan, errChan := client.ReceiveMessages(queryCtx)
-			logger.log("Waiting for messages...")
-
-			var responseBuilder strings.Builder
-			var currentMessageID string // Track the current assistant message ID
-			msgCount := 0
-
-			// Track pending tool uses to provide context for tool results
-			pendingTools := make(map[string]struct {
-				Name string
-				Args string
-			})
-
-			completed := false
-			shouldRetry := false
-
-		messageLoop:
-			for {
-				select {
-				case <-queryCtx.Done():
-					logger.log("Context done: %v", queryCtx.Err())
-					if queryCtx.Err() != nil {
-						// Send interrupt to stop the current operation and clean up
-						logger.log("Sending interrupt to clean up after timeout...")
-						interruptClient(client, logger)
-						// Check if we should retry
-						if attempt < maxRetries {
-							logger.log("Will retry after timeout (attempt %d/%d)", attempt+1, maxRetries)
-							shouldRetry = true
-							break messageLoop
-						}
-						// No more retries, send error
-						errorChan <- fmt.Errorf("query timeout after %d retries: %w", maxRetries, queryCtx.Err())
-					}
-					cancel()
-					return
-
-				case err, ok := <-errChan:
-					logger.log("Error channel: ok=%v, err=%v", ok, err)
-					if !ok {
-						// Error channel closed - set to nil to remove from select
-						logger.log("Error channel closed, removing from select...")
-						errChan = nil
-						continue
-					}
-					if err != nil {
-						logger.log("Actual error received, forwarding and returning")
-						cancel()
-						errorChan <- err
-						return
-					}
-					// nil error received, continue
-					logger.log("Nil error received, continuing...")
-
-				case msg, ok := <-msgChan:
-					msgCount++
-					logger.log("--- Message #%d ---", msgCount)
-					logger.log("Channel ok=%v, msg==nil: %v", ok, msg == nil)
-
-					if !ok {
-						logger.log("Channel closed (ok=false), sending completion")
-						// Channel truly closed - send completion signal
-						if responseBuilder.Len() > 0 {
-							finalResponse := responseBuilder.String()
-							updateChan <- MessageUpdate{
-								Type:    "complete",
-								Content: finalResponse,
-							}
-
-							// Publish assistant response event if eventBus is available
-							if o.eventBus != nil {
-								responseEvent := events.NewAssistantResponse(
-									o.session.ID,
-									"plan",
-									o.session.ID, // Using session ID as agent ID for now
-									o.session.ID, // Using session ID as conversation ID
-									finalResponse,
-									0, // Token count not available here
-									0, // Timing not available here
-									"", // Model not available here
-									map[string]interface{}{
-										"feature_number": o.session.FeatureNumber,
-										"spec_slug":     o.session.SpecSlug,
-										"response_length": len(finalResponse),
-									},
-								)
-								o.eventBus.Publish(responseEvent)
-							}
-						}
-						completed = true
-						break messageLoop
-					}
-
-					// Skip nil messages - SDK may send these during normal operation
-					if msg == nil {
-						logger.log("Skipping nil message")
-						continue
-					}
-
-					// Process message based on type
-					msgType := msg.Type()
-					logger.log("Message type: %s", msgType)
-
-					// Try to marshal the entire message to JSON for debugging
-					if rawJSON, err := json.MarshalIndent(msg, "", "  "); err == nil {
-						logger.log("Raw message JSON:\n%s", string(rawJSON))
-					} else {
-						logger.log("Could not marshal message: %v", err)
-						logger.log("Message value: %+v", msg)
-					}
-
-					switch msgType {
-					case "assistant":
-						logger.log("Processing assistant message")
-
-						// Type assert to SDKAssistantMessage to access content
-						if assistantMsg, ok := msg.(*claude.SDKAssistantMessage); ok {
-							messageID := assistantMsg.Message.ID
-							logger.log("Assistant message ID: %s (current: %s)", messageID, currentMessageID)
-							logger.log("Assistant message has %d content blocks", len(assistantMsg.Message.Content))
-							logger.log("Stop reason: %v", assistantMsg.Message.StopReason)
-							logger.log("Stop sequence: %v", assistantMsg.Message.StopSequence)
-
-							// Check if this is a NEW message (different ID) - signals a new assistant turn
-							if currentMessageID != "" && messageID != currentMessageID {
-								logger.log("New message detected (ID changed), completing previous message")
-								// Complete the previous message before starting the new one
-								// Use "message_done" (not "complete") so TUI keeps listening
-								if responseBuilder.Len() > 0 {
-									updateChan <- MessageUpdate{
-										Type:    "message_done",
-										Content: responseBuilder.String(),
-									}
-									responseBuilder.Reset()
-								}
-							}
-							currentMessageID = messageID
-
-							// Log usage info
-							logger.log("Usage - Input: %d, Output: %d",
-								assistantMsg.Message.Usage.InputTokens,
-								assistantMsg.Message.Usage.OutputTokens)
-
-							// Process each content block in the message
-							for i, block := range assistantMsg.Message.Content {
-								logger.log("Content block %d type: %T", i, block)
-								switch content := block.(type) {
-								case claude.TextContentBlock:
-									logger.log("Text block content (len=%d): %s", len(content.Text), truncateForLog(content.Text, 200))
-									// Stream text content immediately
-									if content.Text != "" {
-										responseBuilder.WriteString(content.Text)
-										updateChan <- MessageUpdate{
-											Type:    "text",
-											Content: content.Text,
-										}
-									}
-								case claude.ToolUseContentBlock:
-									logger.log("Tool use block: %s (ID: %s)", content.Name, content.ID)
-
-									// Extract and format tool arguments
-									var argsStr string
-									var argsMap map[string]interface{}
-									if len(content.Input) > 0 {
-										argsStr = string(content.Input)
-										// Also parse as map for rich display
-										_ = json.Unmarshal(content.Input, &argsMap)
-									}
-
-									// Track this tool use for error context
-									pendingTools[content.ID] = struct {
-										Name string
-										Args string
-									}{
-										Name: content.Name,
-										Args: argsStr,
-									}
-
-									// Send tool use notification immediately
-									updateChan <- MessageUpdate{
-										Type:    "tool_use",
-										Content: content.Name,
-										Args:    argsMap,
-									}
-								default:
-									logger.log("Unknown content block type: %T", block)
-								}
-							}
-						} else {
-							logger.log("Failed to type assert to SDKAssistantMessage, actual type: %T", msg)
-						}
-
-					case "result":
-						logger.log("Processing result message - COMPLETING")
-						// Result message signals completion
-						if responseBuilder.Len() > 0 {
-							finalResponse := responseBuilder.String()
-							updateChan <- MessageUpdate{
-								Type:    "complete",
-								Content: finalResponse,
-							}
-
-							// Publish assistant response event if eventBus is available
-							if o.eventBus != nil {
-								responseEvent := events.NewAssistantResponse(
-									o.session.ID,
-									"plan",
-									o.session.ID, // Using session ID as agent ID for now
-									o.session.ID, // Using session ID as conversation ID
-									finalResponse,
-									0, // Token count not available here
-									0, // Timing not available here
-									"", // Model not available here
-									map[string]interface{}{
-										"feature_number": o.session.FeatureNumber,
-										"spec_slug":     o.session.SpecSlug,
-										"response_length": len(finalResponse),
-									},
-								)
-								o.eventBus.Publish(responseEvent)
-							}
-						}
-						completed = true
-						break messageLoop
-
-					case "system":
-						// System messages (init, etc.) - just log and continue
-						logger.log("System message received, continuing...")
-
-					case "user":
-						// User messages contain tool results - check for errors and surface them
-						logger.log("User message (tool result) received")
-
-						// Try to extract tool result details to surface errors to user
-						if userMsg, ok := msg.(*claude.SDKUserMessage); ok {
-							for _, block := range userMsg.Message.Content {
-								if toolResult, ok := block.(claude.ToolResultContentBlock); ok {
-									// Extract text content from ToolResultContent
-									var contentStr string
-									if toolResult.Content != nil {
-										if toolResult.Content.Text != nil {
-											contentStr = *toolResult.Content.Text
-										} else if len(toolResult.Content.Blocks) > 0 {
-											// Try to extract text from blocks
-											for _, b := range toolResult.Content.Blocks {
-												if textBlock, ok := b.(claude.TextContentBlock); ok {
-													contentStr += textBlock.Text
-												}
-											}
-										}
-									}
-									if contentStr == "" {
-										contentStr = "(no content)"
-									}
-
-									logger.log("Tool result - ID: %s, IsError: %v, Content: %s",
-										toolResult.ToolUseID, toolResult.IsError, truncateForLog(contentStr, 100))
-
-									if toolResult.IsError {
-										// Build error message with context from the tool use
-										errorMsg := contentStr
-										if toolInfo, ok := pendingTools[toolResult.ToolUseID]; ok {
-											errorMsg = fmt.Sprintf("%s\nTool: %s\nArgs: %s",
-												contentStr, toolInfo.Name, toolInfo.Args)
-										}
-
-										// Surface tool error to the user
-										updateChan <- MessageUpdate{
-											Type:    "tool_error",
-											Content: errorMsg,
-										}
-									}
-
-									// Clean up tracked tool
-									delete(pendingTools, toolResult.ToolUseID)
-								}
-							}
-						}
-						logger.log("Waiting for agent response...")
-
-					default:
-						logger.log("Unknown message type: %s, continuing...", msgType)
-					}
-				}
-			}
-
-			cancel()
-
-			if completed {
-				return
-			}
-
-			if !shouldRetry {
-				return
-			}
-		}
-	}()
-
-	return updateChan, errorChan
-}
-
-// Interrupt gracefully interrupts the current agent operation without stopping the orchestrator
-func (o *PlanOrchestrator) Interrupt() error {
-	if o.agent != nil {
-		client := o.agent.GetClient()
-		if client != nil {
-			// Create a temporary debug logger for interrupt operation
-			logger := newDebugLogger()
-			defer logger.close()
-
-			logger.log("User requested interrupt")
-			interruptClient(client, logger)
-		}
-	}
-	return nil
-}
-
-// Stop gracefully shuts down the orchestrator
-func (o *PlanOrchestrator) Stop() error {
-	o.cancel()
-
-	if o.agent != nil {
-		return o.agent.Stop()
-	}
-
-	return nil
+// GetSession returns the plan session (for orchestrators that need direct access)
+func (o *PlanOrchestrator) GetSession() *types.PlanSession {
+	return o.session
 }

@@ -453,14 +453,34 @@ func (c *ChatView) AddError(err error) {
 }
 
 // AddWelcomeMessage adds an initial welcome message from the assistant
-// hasDescription indicates whether the user provided a feature description as an argument
-func (c *ChatView) AddWelcomeMessage(featureName string, hasDescription bool) {
+// title is the phase title (e.g., "Collab Specify: Feature Name" or "Collab Bug Fix: Bug Name")
+// hasDescription indicates whether the user provided a description as an argument
+func (c *ChatView) AddWelcomeMessage(title string, hasDescription bool) {
 	var welcome string
 
-	if hasDescription {
+	// Detect phase type from title
+	if strings.Contains(title, "Bug Fix") {
+		welcome = fmt.Sprintf(`# Welcome to Bug Fix
+
+I'll help you fix this bug: **%s**
+
+Please describe the bug so I can help you resolve it.`, strings.TrimPrefix(title, "Collab Bug Fix: "))
+	} else if strings.Contains(title, "Plan") {
+		welcome = fmt.Sprintf(`# Welcome to Implementation Planning
+
+I'll help you create an implementation plan for: **%s**`, strings.TrimPrefix(title, "Collab Plan: "))
+	} else if strings.Contains(title, "Tasks") {
+		welcome = fmt.Sprintf(`# Welcome to Task Generation
+
+I'll help you break down the implementation into tasks for: **%s**`, strings.TrimPrefix(title, "Collab Tasks: "))
+	} else if strings.Contains(title, "Implement") {
+		welcome = fmt.Sprintf(`# Welcome to Implementation
+
+I'll help you implement: **%s**`, strings.TrimPrefix(title, "Collab Implement: "))
+	} else if hasDescription {
 		welcome = fmt.Sprintf(`# Welcome to Feature Specification
 
-I'll help you create a comprehensive specification for: **%s**`, featureName)
+I'll help you create a comprehensive specification for: **%s**`, strings.TrimPrefix(title, "Collab Specify: "))
 	} else {
 		welcome = `# Welcome to Feature Specification
 

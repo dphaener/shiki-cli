@@ -182,3 +182,40 @@ func LoadImplementPrompt(data ImplementPromptData) (string, error) {
 
 	return buf.String(), nil
 }
+
+// BugPromptData contains the data for rendering the bug prompt template
+type BugPromptData struct {
+	Title       string
+	Description string
+	Phase       string
+	BugID       string
+	BugDir      string
+	PlanFile    string
+	TasksFile   string
+}
+
+// LoadBugPrompt loads and renders the bug system prompt
+// It checks for an external override at .sekkei/templates/bug-prompt.md first,
+// then falls back to the embedded default prompt
+func LoadBugPrompt(data BugPromptData) (string, error) {
+	promptContent := defaultBugPrompt
+
+	// Check for external override
+	overridePath := filepath.Join(".sekkei", "templates", "bug-prompt.md")
+	if content, err := os.ReadFile(overridePath); err == nil {
+		promptContent = string(content)
+	}
+
+	// Parse and execute template
+	tmpl, err := template.New("bug-prompt").Parse(promptContent)
+	if err != nil {
+		return "", fmt.Errorf("parse bug prompt template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("execute bug prompt template: %w", err)
+	}
+
+	return buf.String(), nil
+}

@@ -105,6 +105,12 @@ func (p *ImplementPreview) SetSummary(summary string) {
 	}
 }
 
+// SetContent implements the PreviewComponent interface.
+// For ImplementPreview, this sets the summary text.
+func (p *ImplementPreview) SetContent(content string) {
+	p.SetSummary(content)
+}
+
 // UpdateTaskStatus updates the status of a specific task
 func (p *ImplementPreview) UpdateTaskStatus(taskID string, status TaskStatus, output string) {
 	for i, task := range p.tasks {

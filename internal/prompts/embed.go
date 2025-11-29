@@ -13,3 +13,6 @@ var defaultTasksPrompt string
 
 //go:embed implement_prompt.md
 var defaultImplementPrompt string
+
+//go:embed bug_prompt.md
+var defaultBugPrompt string
