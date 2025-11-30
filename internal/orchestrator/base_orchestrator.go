@@ -120,13 +120,6 @@ func (o *BaseOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate
 		defer close(updateChan)
 		defer close(errorChan)
 
-		client := o.agent.GetClient()
-		if client == nil {
-			logger.log("ERROR: agent not initialized")
-			errorChan <- fmt.Errorf("agent not initialized")
-			return
-		}
-
 		// Build the message to send
 		messageToSend := userMessage
 
@@ -137,11 +130,39 @@ func (o *BaseOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate
 			o.instructionsSent = true
 		}
 
-		// Retry loop for handling timeouts
+		// Track last error for recovery decisions
+		var lastError error
+
+		// Retry loop for handling timeouts and broken pipes
 		for attempt := 0; attempt <= maxRetries; attempt++ {
 			if attempt > 0 {
-				logger.log("Retry attempt %d/%d after timeout", attempt, maxRetries)
+				logger.log("Retry attempt %d/%d", attempt, maxRetries)
+
+				// Restart client on recoverable errors (broken pipes, etc.) or if client is nil
+				if agentpkg.IsRecoverableError(lastError) || o.agent.GetClient() == nil {
+					logger.log("Attempting client recreation due to: %v", lastError)
+					// Use a fresh background context - the orchestrator context may be cancelled
+					if err := o.agent.Restart(context.Background()); err != nil {
+						logger.log("Client recreation failed: %v", err)
+						// Continue anyway - next query will fail if still broken
+					} else {
+						logger.log("Client recreated successfully")
+					}
+				}
+
 				time.Sleep(retryDelay)
+			}
+
+			// Get client inside the loop (may have been recreated)
+			client := o.agent.GetClient()
+			if client == nil {
+				logger.log("ERROR: agent client is nil, will retry")
+				lastError = fmt.Errorf("agent client is nil")
+				if attempt < maxRetries {
+					continue
+				}
+				errorChan <- fmt.Errorf("agent not initialized after %d retries", maxRetries)
+				return
 			}
 
 			// Create query context with timeout for this attempt
@@ -152,6 +173,13 @@ func (o *BaseOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate
 			if err := client.Query(queryCtx, messageToSend); err != nil {
 				cancel()
 				logger.log("ERROR: failed to send query: %v", err)
+				lastError = err
+
+				// Check if this is a recoverable error (broken pipe, etc.)
+				if agentpkg.IsRecoverableError(err) && attempt < maxRetries {
+					logger.log("Recoverable error detected, will retry with client restart")
+					continue
+				}
 
 				// Publish error event
 				if o.eventBus != nil {
@@ -300,6 +328,13 @@ func (o *BaseOrchestrator) SendMessage(userMessage string) (<-chan MessageUpdate
 					if msg == nil {
 						logger.log("Skipping nil message")
 						continue
+					}
+
+					// Capture session ID for resume capability
+					if sessionIDProvider, ok := msg.(interface{ SessionID() string }); ok {
+						if sid := sessionIDProvider.SessionID(); sid != "" {
+							o.agent.SetSessionID(sid)
+						}
 					}
 
 					msgType := msg.Type()

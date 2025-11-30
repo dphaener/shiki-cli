@@ -119,18 +119,31 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 		return nil, fmt.Errorf("agent %s is not healthy", agentID)
 	}
 
-	client := agent.GetClient()
-	if client == nil {
-		return nil, fmt.Errorf("agent %s SDK client not initialized", agentID)
-	}
-
 	start := time.Now()
 
-	// Retry loop for handling timeouts
+	// Track last error for recovery decisions
+	var lastQueryError error
+
+	// Retry loop for handling timeouts and broken pipes
 	for attempt := 0; attempt <= maxTurnRetries; attempt++ {
 		if attempt > 0 {
+			// Restart client on recoverable errors (broken pipes, etc.) or if client is nil
+			if IsRecoverableError(lastQueryError) || agent.GetClient() == nil {
+				_ = agent.Restart(context.Background()) // Use fresh context
+			}
+
 			// Brief delay before retry
 			time.Sleep(turnRetryDelay)
+		}
+
+		// Get client inside the loop (may have been recreated)
+		client := agent.GetClient()
+		if client == nil {
+			lastQueryError = fmt.Errorf("agent client is nil")
+			if attempt < maxTurnRetries {
+				continue
+			}
+			return nil, fmt.Errorf("agent %s SDK client not initialized after %d retries", agentID, maxTurnRetries)
 		}
 
 		// Create timeout context (5 minute default)
@@ -143,6 +156,13 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 		// Send query to agent via SDK
 		if err := client.Query(turnCtx, query); err != nil {
 			cancel()
+			lastQueryError = err
+
+			// Check if this is a recoverable error (broken pipe, etc.)
+			if IsRecoverableError(err) && attempt < maxTurnRetries {
+				continue
+			}
+
 			return nil, fmt.Errorf("failed to send query to agent: %w", err)
 		}
 
@@ -189,6 +209,13 @@ func (m *Manager) StartTurn(ctx context.Context, agentID, query string, turnNumb
 				// Skip nil messages - SDK may send these during normal operation
 				if msg == nil {
 					continue
+				}
+
+				// Capture session ID for resume capability
+				if sessionIDProvider, ok := msg.(interface{ SessionID() string }); ok {
+					if sid := sessionIDProvider.SessionID(); sid != "" {
+						agent.SetSessionID(sid)
+					}
 				}
 
 				msgType := msg.Type()
@@ -320,6 +347,8 @@ func (m *Manager) monitorHealth(ctx context.Context, agent *Agent) {
 	defer ticker.Stop()
 
 	lastHealthy := agent.IsHealthy()
+	consecutiveFailures := 0
+	const maxConsecutiveFailures = 3
 
 	for {
 		select {
@@ -327,22 +356,33 @@ func (m *Manager) monitorHealth(ctx context.Context, agent *Agent) {
 			return
 		case <-ticker.C:
 			// Check if SDK client is still functional
-			// We check this by verifying the client is non-nil and healthy
-			isAlive := agent.GetClient() != nil
+			client := agent.GetClient()
+			isAlive := client != nil
 
-			// Update agent health status
-			agent.SetHealth(isAlive)
+			if !isAlive {
+				consecutiveFailures++
+			} else {
+				consecutiveFailures = 0
+			}
 
-			// Emit event if health changed
-			if lastHealthy && !isAlive {
-				// Agent crashed or client closed
+			// Mark unhealthy after consecutive failures
+			if consecutiveFailures >= maxConsecutiveFailures {
+				agent.SetHealth(false)
+			} else {
+				agent.SetHealth(isAlive)
+			}
+
+			currentHealth := agent.IsHealthy()
+
+			// Emit event if health changed (degraded)
+			if lastHealthy && !currentHealth {
 				m.eventBus.Publish(events.NewSessionError(
 					&types.Session{ID: m.sessionID},
-					fmt.Sprintf("Agent %s SDK client failed", agent.ID),
+					fmt.Sprintf("Agent %s connection degraded", agent.ID),
 				))
 			}
 
-			lastHealthy = isAlive
+			lastHealthy = currentHealth
 		}
 	}
 }

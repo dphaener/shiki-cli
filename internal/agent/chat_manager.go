@@ -96,11 +96,6 @@ func (m *ChatManager) StartTurn(ctx context.Context, agentID, query string, turn
 		return nil, fmt.Errorf("agent %s is not healthy", agentID)
 	}
 
-	client := agent.GetClient()
-	if client == nil {
-		return nil, fmt.Errorf("agent %s SDK client not initialized", agentID)
-	}
-
 	start := time.Now()
 
 	// Emit turn started event
@@ -117,11 +112,30 @@ func (m *ChatManager) StartTurn(ctx context.Context, agentID, query string, turn
 	m.streamingMsgs[agentID] = msg.ID
 	m.streamMu.Unlock()
 
-	// Retry loop for handling timeouts
+	// Track last error for recovery decisions
+	var lastQueryError error
+
+	// Retry loop for handling timeouts and broken pipes
 	for attempt := 0; attempt <= maxTurnRetries; attempt++ {
 		if attempt > 0 {
+			// Restart client on recoverable errors (broken pipes, etc.) or if client is nil
+			if IsRecoverableError(lastQueryError) || agent.GetClient() == nil {
+				_ = agent.Restart(context.Background()) // Use fresh context
+			}
+
 			// Brief delay before retry
 			time.Sleep(turnRetryDelay)
+		}
+
+		// Get client inside the loop (may have been recreated)
+		client := agent.GetClient()
+		if client == nil {
+			lastQueryError = fmt.Errorf("agent client is nil")
+			if attempt < maxTurnRetries {
+				continue
+			}
+			m.finishStream(ctx, msg.ID, conversation.FinishReasonError, 0, 0)
+			return nil, fmt.Errorf("agent %s SDK client not initialized after %d retries", agentID, maxTurnRetries)
 		}
 
 		// Create timeout context (5 minute default)
@@ -134,6 +148,13 @@ func (m *ChatManager) StartTurn(ctx context.Context, agentID, query string, turn
 		// Send query to agent via SDK
 		if err := client.Query(turnCtx, query); err != nil {
 			cancel()
+			lastQueryError = err
+
+			// Check if this is a recoverable error (broken pipe, etc.)
+			if IsRecoverableError(err) && attempt < maxTurnRetries {
+				continue
+			}
+
 			m.finishStream(turnCtx, msg.ID, conversation.FinishReasonError, 0, 0)
 			return nil, fmt.Errorf("failed to send query to agent: %w", err)
 		}
@@ -189,6 +210,13 @@ func (m *ChatManager) StartTurn(ctx context.Context, agentID, query string, turn
 				// Skip nil messages - SDK may send these during normal operation
 				if sdkMsg == nil {
 					continue
+				}
+
+				// Capture session ID for resume capability
+				if sessionIDProvider, ok := sdkMsg.(interface{ SessionID() string }); ok {
+					if sid := sessionIDProvider.SessionID(); sid != "" {
+						agent.SetSessionID(sid)
+					}
 				}
 
 				msgType := sdkMsg.Type()
@@ -424,31 +452,47 @@ func (m *ChatManager) monitorHealth(ctx context.Context, agent *Agent) {
 	defer ticker.Stop()
 
 	lastHealthy := agent.IsHealthy()
+	consecutiveFailures := 0
+	const maxConsecutiveFailures = 3
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			isAlive := agent.GetClient() != nil
-			agent.SetHealth(isAlive)
+			client := agent.GetClient()
+			isAlive := client != nil
 
-			if lastHealthy && !isAlive {
+			if !isAlive {
+				consecutiveFailures++
+			} else {
+				consecutiveFailures = 0
+			}
+
+			// Mark unhealthy after consecutive failures
+			if consecutiveFailures >= maxConsecutiveFailures {
+				agent.SetHealth(false)
+			} else {
+				agent.SetHealth(isAlive)
+			}
+
+			currentHealth := agent.IsHealthy()
+
+			if lastHealthy && !currentHealth {
 				// Agent crashed or client closed - emit to both systems
 				if m.broker != nil {
-					// Create a minimal session for the error event
 					errSession := &conversation.Session{ID: m.sessionID}
-					m.broker.Publish(broker.NewSessionErrorEvent(errSession, fmt.Errorf("agent %s SDK client failed", agent.ID)))
+					m.broker.Publish(broker.NewSessionErrorEvent(errSession, fmt.Errorf("agent %s connection degraded", agent.ID)))
 				}
 				if m.legacyBus != nil {
 					m.legacyBus.Publish(events.NewSessionError(
 						&types.Session{ID: m.sessionID},
-						fmt.Sprintf("Agent %s SDK client failed", agent.ID),
+						fmt.Sprintf("Agent %s connection degraded", agent.ID),
 					))
 				}
 			}
 
-			lastHealthy = isAlive
+			lastHealthy = currentHealth
 		}
 	}
 }

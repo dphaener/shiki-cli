@@ -117,12 +117,6 @@ func (o *ChatSpecifyOrchestrator) SendMessage(userMessage string) (<-chan Messag
 		defer close(updateChan)
 		defer close(errorChan)
 
-		client := o.agent.GetClient()
-		if client == nil {
-			errorChan <- fmt.Errorf("agent not initialized")
-			return
-		}
-
 		// Increment turn
 		o.currentTurn++
 
@@ -157,11 +151,31 @@ func (o *ChatSpecifyOrchestrator) SendMessage(userMessage string) (<-chan Messag
 			o.broker.Publish(broker.NewTurnStartedEvent(o.session.ID, agentID, o.currentTurn))
 		}
 
-		// Retry loop for handling timeouts
+		// Track last error for recovery decisions
+		var lastError error
+
+		// Retry loop for handling timeouts and broken pipes
 		for attempt := 0; attempt <= maxRetries; attempt++ {
 			if attempt > 0 {
+				// Restart client on recoverable errors (broken pipes, etc.) or if client is nil
+				if agentpkg.IsRecoverableError(lastError) || o.agent.GetClient() == nil {
+					_ = o.agent.Restart(context.Background()) // Use fresh context
+				}
+
 				// Brief delay before retry
 				time.Sleep(retryDelay)
+			}
+
+			// Get client inside the loop (may have been recreated)
+			client := o.agent.GetClient()
+			if client == nil {
+				lastError = fmt.Errorf("agent client is nil")
+				if attempt < maxRetries {
+					continue
+				}
+				o.messageSvc.FinishStream(o.ctx, assistantMsg.ID, conversation.FinishReasonError, 0, 0)
+				errorChan <- fmt.Errorf("agent not initialized after %d retries", maxRetries)
+				return
 			}
 
 			// Create query context with timeout for this attempt
@@ -170,6 +184,13 @@ func (o *ChatSpecifyOrchestrator) SendMessage(userMessage string) (<-chan Messag
 			// Send query to agent
 			if err := client.Query(queryCtx, userMessage); err != nil {
 				cancel()
+				lastError = err
+
+				// Check if this is a recoverable error (broken pipe, etc.)
+				if agentpkg.IsRecoverableError(err) && attempt < maxRetries {
+					continue
+				}
+
 				o.messageSvc.FinishStream(o.ctx, assistantMsg.ID, conversation.FinishReasonError, 0, 0)
 				errorChan <- fmt.Errorf("failed to send query: %w", err)
 				return
@@ -224,6 +245,13 @@ func (o *ChatSpecifyOrchestrator) SendMessage(userMessage string) (<-chan Messag
 						}
 						completed = true
 						break messageLoop
+					}
+
+					// Capture session ID for resume capability
+					if sessionIDProvider, ok := msg.(interface{ SessionID() string }); ok {
+						if sid := sessionIDProvider.SessionID(); sid != "" {
+							o.agent.SetSessionID(sid)
+						}
 					}
 
 					// Process message based on type
