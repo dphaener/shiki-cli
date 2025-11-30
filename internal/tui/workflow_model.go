@@ -45,10 +45,25 @@ type WorkflowModel struct {
 	activePhaseModel tea.Model
 }
 
+// getFeatureDisplayPhases returns display phases for feature workflow with proper status
+func getFeatureDisplayPhases(currentPhase types.WorkflowPhase) []components.DisplayPhase {
+	displayPhases := types.GetDisplayPhases()
+	result := make([]components.DisplayPhase, len(displayPhases))
+
+	for i, phase := range displayPhases {
+		result[i] = components.DisplayPhase{
+			Name:   types.GetPhaseName(phase),
+			Status: types.GetPhaseStatus(phase, currentPhase),
+		}
+	}
+
+	return result
+}
+
 // NewWorkflowModel creates a new workflow model
 func NewWorkflowModel(session *types.WorkflowSession, eventBus *events.EventBus) WorkflowModel {
 	// Create progress stepper
-	stepper := components.NewProgressStepper(types.GetDisplayPhases(), session.CurrentPhase)
+	stepper := components.NewProgressStepper(getFeatureDisplayPhases(session.CurrentPhase))
 
 	// Create approval bar
 	approvalBar := components.NewApprovalBar(session.CurrentPhase)
@@ -222,7 +237,7 @@ func (m WorkflowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_ = storage.SaveWorkflowSession(m.session)
 
 		// Update UI components
-		m.progressStepper.SetCurrentPhase(m.session.CurrentPhase)
+		m.progressStepper.SetPhases(getFeatureDisplayPhases(m.session.CurrentPhase))
 		m.approvalBar.SetPhase(m.session.CurrentPhase)
 
 		// Update approval view size if it was just created
@@ -433,7 +448,7 @@ func (m *WorkflowModel) renderHeader() string {
 	title := fmt.Sprintf("Collab Feature: %s", m.session.FriendlyName)
 
 	// Update stepper with current phase
-	m.progressStepper.SetCurrentPhase(m.session.CurrentPhase)
+	m.progressStepper.SetPhases(getFeatureDisplayPhases(m.session.CurrentPhase))
 
 	headerContent := lipgloss.JoinVertical(
 		lipgloss.Left,

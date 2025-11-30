@@ -6,19 +6,23 @@ import (
 	"github.com/darinhaener/collab/pkg/types"
 )
 
+// DisplayPhase represents a phase in the progress stepper with flexible naming and status
+type DisplayPhase struct {
+	Name       string
+	Status     types.WorkflowPhaseStatus
+}
+
 // ProgressStepper displays workflow progress through phases
 type ProgressStepper struct {
-	phases       []types.WorkflowPhase
-	currentPhase types.WorkflowPhase
-	width        int
+	phases []DisplayPhase
+	width  int
 }
 
 // NewProgressStepper creates a new progress stepper
-func NewProgressStepper(phases []types.WorkflowPhase, currentPhase types.WorkflowPhase) ProgressStepper {
+func NewProgressStepper(phases []DisplayPhase) ProgressStepper {
 	return ProgressStepper{
-		phases:       phases,
-		currentPhase: currentPhase,
-		width:        80, // default
+		phases: phases,
+		width:  80, // default
 	}
 }
 
@@ -27,9 +31,9 @@ func (p *ProgressStepper) SetWidth(width int) {
 	p.width = width
 }
 
-// SetCurrentPhase updates the current phase
-func (p *ProgressStepper) SetCurrentPhase(phase types.WorkflowPhase) {
-	p.currentPhase = phase
+// SetPhases updates the phases and their statuses
+func (p *ProgressStepper) SetPhases(phases []DisplayPhase) {
+	p.phases = phases
 }
 
 // View renders the progress stepper
@@ -42,12 +46,8 @@ func (p ProgressStepper) View() string {
 	connector := stepperConnectorStyle.Render(" → ")
 
 	for i, phase := range p.phases {
-		status := types.GetPhaseStatus(phase, p.currentPhase)
-		name := types.GetPhaseName(phase)
-		stepNumber := i + 1
-
 		// Render step with status indicator
-		step := p.renderStep(stepNumber, name, status)
+		step := p.renderStep(i+1, phase.Name, phase.Status)
 		parts = append(parts, step)
 
 		// Add connector between steps (not after last)

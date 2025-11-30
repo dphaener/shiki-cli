@@ -5,10 +5,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/internal/orchestrator"
 	"github.com/darinhaener/collab/internal/storage"
 	"github.com/darinhaener/collab/internal/tui/components"
+	"github.com/darinhaener/collab/internal/tui/theme"
 	"github.com/darinhaener/collab/pkg/types"
 )
 
@@ -16,8 +18,14 @@ import (
 // It wraps PhaseModel with bug-specific configuration and phase transitions.
 type BugModel struct {
 	*PhaseModel
-	session    *types.BugSession
-	bugPreview *components.BugPreview
+	session         *types.BugSession
+	bugPreview      *components.BugPreview
+	progressStepper components.ProgressStepper
+	approvalBar     components.ApprovalBar
+	approvalView    *components.ApprovalView
+	width           int
+	height          int
+	ready           bool
 }
 
 // bugPreviewWrapper wraps BugPreview to implement PreviewUpdater
@@ -47,6 +55,58 @@ func (w *bugPreviewWrapper) UpdatePreview(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+// convertBugStatusToWorkflowStatus converts BugPhaseStatus to WorkflowPhaseStatus
+func convertBugStatusToWorkflowStatus(bugStatus types.BugPhaseStatus) types.WorkflowPhaseStatus {
+	switch bugStatus {
+	case types.BugPhaseStatusPending:
+		return types.PhaseStatusPending
+	case types.BugPhaseStatusCurrent:
+		return types.PhaseStatusCurrent
+	case types.BugPhaseStatusComplete:
+		return types.PhaseStatusComplete
+	default:
+		return types.PhaseStatusPending
+	}
+}
+
+// getBugDisplayPhases returns display phases for bug workflow with proper status
+// Maps 5 bug phases to 3 display phases: Plan+ApprovePlan→"Plan", Tasks+ApproveTasks→"Tasks", Implement→"Implement"
+func getBugDisplayPhases(currentPhase types.BugPhase) []components.DisplayPhase {
+	var bugPhase types.BugPhase
+	displayPhases := bugPhase.GetDisplayPhases()
+	result := make([]components.DisplayPhase, len(displayPhases))
+
+	for i, phase := range displayPhases {
+		bugStatus := bugPhase.GetPhaseStatus(phase, currentPhase)
+		result[i] = components.DisplayPhase{
+			Name:   bugPhase.GetPhaseName(phase),
+			Status: convertBugStatusToWorkflowStatus(bugStatus),
+		}
+	}
+
+	return result
+}
+
+// convertBugPhaseToWorkflowPhase converts a bug phase to equivalent workflow phase for ApprovalBar compatibility
+func convertBugPhaseToWorkflowPhase(bugPhase types.BugPhase) types.WorkflowPhase {
+	switch bugPhase {
+	case types.BugPhasePlan:
+		return types.WorkflowPhasePlan
+	case types.BugPhaseApprovePlan:
+		return types.WorkflowPhaseApprovePlan
+	case types.BugPhaseTasks:
+		return types.WorkflowPhaseTasks
+	case types.BugPhaseApproveTasks:
+		return types.WorkflowPhaseApproveTasks
+	case types.BugPhaseImplement:
+		return types.WorkflowPhaseImplement
+	case types.BugPhaseComplete:
+		return types.WorkflowPhaseComplete
+	default:
+		return types.WorkflowPhasePlan
+	}
+}
+
 // NewBugModel creates a new bug workflow model
 func NewBugModel(session *types.BugSession, eventBus *events.EventBus) BugModel {
 	bugPreview := components.NewBugPreview(80, 24)
@@ -54,14 +114,25 @@ func NewBugModel(session *types.BugSession, eventBus *events.EventBus) BugModel 
 	bugPreview.SetFiles(session.PlanFile, session.TasksFile)
 	previewWrapper := &bugPreviewWrapper{preview: &bugPreview}
 
+	// Create progress stepper
+	progressStepper := components.NewProgressStepper(getBugDisplayPhases(session.CurrentPhase))
+
+	// Create approval bar (convert bug phase to workflow phase for compatibility)
+	approvalBar := components.NewApprovalBar(convertBugPhaseToWorkflowPhase(session.CurrentPhase))
+
 	// Create the orchestrator
 	apiKey := orchestrator.GetAPIKey()
 	orch := orchestrator.NewBugOrchestrator(session, apiKey, eventBus)
 
 	// Create the model first (we need it for closure references)
 	model := &BugModel{
-		session:    session,
-		bugPreview: &bugPreview,
+		session:         session,
+		bugPreview:      &bugPreview,
+		progressStepper: progressStepper,
+		approvalBar:     approvalBar,
+		width:           80,  // default
+		height:          24, // default
+		ready:           false,
 	}
 
 	// Create the phase model config
@@ -97,7 +168,67 @@ func NewBugModel(session *types.BugSession, eventBus *events.EventBus) BugModel 
 	// Create the PhaseModel
 	model.PhaseModel = NewPhaseModel(config, orch, previewWrapper, eventBus)
 
+	// Initialize the phase (including approval view if needed)
+	// Note: initializeBugPhase() returns a command, but in constructor we don't execute it
+	// The command will be executed during the first Init() call
+	model.initializeBugPhase()
+
 	return *model
+}
+
+// initializeBugPhase creates the appropriate view for the current bug phase
+func (m *BugModel) initializeBugPhase() tea.Cmd {
+	// Clear approval view when not in approval phase
+	m.approvalView = nil
+
+	switch m.session.CurrentPhase {
+	case types.BugPhasePlan:
+		// Initialize agent for plan phase
+		return m.reinitializeAgent()
+	case types.BugPhaseApprovePlan:
+		// Show approval view for plan
+		m.approvalView = components.NewApprovalView(convertBugPhaseToWorkflowPhase(m.session.CurrentPhase), m.session.PlanFile)
+		return nil
+	case types.BugPhaseTasks:
+		// Initialize agent for tasks phase
+		return m.reinitializeAgent()
+	case types.BugPhaseApproveTasks:
+		// Show approval view for tasks
+		m.approvalView = components.NewApprovalView(convertBugPhaseToWorkflowPhase(m.session.CurrentPhase), m.session.TasksFile)
+		return nil
+	case types.BugPhaseImplement:
+		// Initialize agent for implement phase
+		return m.reinitializeAgent()
+	default:
+		return nil
+	}
+}
+
+// reinitializeAgent creates a new agent instance for the current working phase
+func (m *BugModel) reinitializeAgent() tea.Cmd {
+	if m.PhaseModel == nil {
+		return nil
+	}
+
+	// Return a command that will reinitialize the agent
+	return func() tea.Msg {
+		// Create new orchestrator for this phase
+		apiKey := orchestrator.GetAPIKey()
+		orch := orchestrator.NewBugOrchestrator(m.session, apiKey, m.PhaseModel.eventBus)
+
+		// Set phase-specific instructions
+		instructions := m.getPhaseInstructions()
+		if instructions != "" {
+			orch.SetPlanInstructions(instructions)
+		}
+
+		// Initialize the agent
+		if err := orch.Initialize(); err != nil {
+			return BugAgentErrorMsg{Err: err}
+		}
+
+		return BugAgentInitializedMsg{Orchestrator: orch}
+	}
 }
 
 // Init implements tea.Model
@@ -127,29 +258,129 @@ func initializeBugAgent(session *types.BugSession, eventBus *events.EventBus) te
 func (m BugModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle bug-specific messages first
 	switch msg := msg.(type) {
+	case bugPhaseChangedMsg:
+		// Update session state
+		m.session.CurrentPhase = msg.to
+		m.session.UpdatedAt = time.Now()
+
+		// Initialize the new phase (including approval view if needed)
+		initCmd := m.initializeBugPhase()
+
+		// Save bug session state
+		_ = storage.SaveBugSession(m.session)
+
+		// Update UI components
+		m.progressStepper.SetPhases(getBugDisplayPhases(m.session.CurrentPhase))
+		m.approvalBar.SetPhase(convertBugPhaseToWorkflowPhase(m.session.CurrentPhase))
+
+		// Update approval view size if it was just created
+		if m.approvalView != nil && m.width > 0 {
+			headerHeight := 4
+			m.approvalView.SetSize(m.width, m.height-headerHeight)
+		}
+
+		// Check if workflow is complete
+		if m.session.CurrentPhase == types.BugPhaseComplete {
+			m.PhaseModel.quitting = true
+			return m, tea.Quit
+		}
+
+		// Return the initialization command if there is one
+		return m, initCmd
+
 	case BugAgentInitializedMsg:
 		// Replace the orchestrator in PhaseModel
 		m.PhaseModel.orchestrator = msg.Orchestrator
 		// Set phase-specific instructions
 		msg.Orchestrator.SetPlanInstructions(m.getPhaseInstructions())
+
+		// Inject the phase prompt to start the conversation
+		prompt := m.getPhasePrompt()
+		if prompt != "" {
+			// Send the initial prompt using PhaseModel's system
+			return m, tea.Sequence(
+				func() tea.Msg { return PhaseAgentReadyMsg{} },
+				m.PhaseModel.sendMessage(prompt),
+			)
+		}
+
 		// Signal that agent is ready
 		return m, func() tea.Msg { return PhaseAgentReadyMsg{} }
 
 	case BugAgentErrorMsg:
 		return m, func() tea.Msg { return PhaseAgentErrorMsg{Err: msg.Err} }
 
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+
+		// Update progress stepper size
+		m.progressStepper.SetWidth(msg.Width)
+
+		// Update approval bar size
+		m.approvalBar.SetWidth(msg.Width)
+
+		// Update approval view size if active
+		if m.approvalView != nil {
+			headerHeight := 4 // approximate header height
+			m.approvalView.SetSize(msg.Width, msg.Height-headerHeight)
+		}
+
+		if !m.ready {
+			m.ready = true
+		}
+
 	case tea.KeyMsg:
-		// Handle bug-specific key bindings for phase transitions
-		switch msg.String() {
-		case "ctrl+a":
-			// Approve current phase and move to next
-			if m.isApprovalPhase() {
+		// Handle approval phase shortcuts (matching feature workflow)
+		if m.isApprovalPhase() {
+			switch msg.String() {
+			case "y", "Y":
+				// Approve and advance
 				return m.approveAndContinue()
+			case "b", "B":
+				// Go back to previous phase
+				if m.session.CurrentPhase.CanGoBack(m.session.CurrentPhase) {
+					return m.goToPreviousPhase()
+				}
+			case "e", "E":
+				// Continue editing - go back to the working phase
+				return m.goBackToWorkingPhase()
+			case "up", "k", "K":
+				// Scroll up in approval view
+				if m.approvalView != nil {
+					m.approvalView.ScrollUp(3)
+				}
+				return m, nil
+			case "down", "j", "J":
+				// Scroll down in approval view
+				if m.approvalView != nil {
+					m.approvalView.ScrollDown(3)
+				}
+				return m, nil
+			case "pgup":
+				// Page up in approval view
+				if m.approvalView != nil {
+					m.approvalView.ScrollUp(10)
+				}
+				return m, nil
+			case "pgdown":
+				// Page down in approval view
+				if m.approvalView != nil {
+					m.approvalView.ScrollDown(10)
+				}
+				return m, nil
 			}
-		case "ctrl+b":
-			// Go back to previous phase
-			if m.session.CurrentPhase.CanGoBack(m.session.CurrentPhase) {
-				return m.goToPreviousPhase()
+		}
+
+		// Global shortcuts (matching feature workflow)
+		switch msg.String() {
+		case "ctrl+c":
+			// Quit application (handled by PhaseModel, but ensure consistency)
+			// Let it fall through to PhaseModel delegation
+		case "ctrl+d", "ctrl+D":
+			// Mark current working phase as done and advance to approval
+			if m.isWorkingPhase() {
+				return m.advanceToApproval()
 			}
 		}
 	}
@@ -163,12 +394,82 @@ func (m BugModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model
 func (m BugModel) View() string {
-	return m.PhaseModel.View()
+	if !m.ready {
+		return "Initializing bug workflow..."
+	}
+
+	var parts []string
+
+	// Header with progress stepper
+	header := m.renderHeader()
+	parts = append(parts, header)
+
+	// Main content - either approval view or phase model
+	if m.approvalView != nil {
+		// In approval phase - show full-screen approval view
+		headerHeight := lipgloss.Height(header)
+		m.approvalView.SetSize(m.width, m.height-headerHeight)
+		parts = append(parts, m.approvalView.View())
+	} else {
+		// In working phase - show phase model content
+		// Calculate available height for content
+		headerHeight := lipgloss.Height(header)
+		footerHeight := lipgloss.Height(m.renderFooter())
+		contentHeight := m.height - headerHeight - footerHeight
+
+		// Get view from phase model content
+		content := m.renderPhaseContent(contentHeight)
+		parts = append(parts, content)
+
+		// Footer with approval bar (only in working phases)
+		footer := m.renderFooter()
+		parts = append(parts, footer)
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 // ViewContent returns just the content without header/footer for embedding in workflow
 func (m BugModel) ViewContent() string {
 	return m.PhaseModel.ViewContent()
+}
+
+// renderHeader renders the bug workflow header with progress stepper
+func (m *BugModel) renderHeader() string {
+	title := fmt.Sprintf("Collab Bug Fix: %s", m.session.Title)
+
+	// Update stepper with current phase
+	m.progressStepper.SetPhases(getBugDisplayPhases(m.session.CurrentPhase))
+
+	headerContent := lipgloss.JoinVertical(
+		lipgloss.Left,
+		bugTitleStyle.Render(title),
+		m.progressStepper.View(),
+	)
+
+	return bugHeaderStyle.Width(m.width).Render(headerContent)
+}
+
+// renderFooter renders the bug workflow footer with approval bar
+func (m *BugModel) renderFooter() string {
+	m.approvalBar.SetPhase(convertBugPhaseToWorkflowPhase(m.session.CurrentPhase))
+	return bugFooterStyle.Width(m.width).Render(m.approvalBar.View())
+}
+
+// renderPhaseContent renders the content from the active phase model
+func (m *BugModel) renderPhaseContent(contentHeight int) string {
+	if m.PhaseModel == nil {
+		return "No active phase"
+	}
+
+	// Get view from phase model
+	content := m.PhaseModel.ViewContent()
+
+	// Style the content area
+	return bugContentStyle.
+		Width(m.width).
+		Height(contentHeight).
+		Render(content)
 }
 
 // refreshBugPreview updates the bug preview from files
@@ -279,53 +580,93 @@ func (m *BugModel) isApprovalPhase() bool {
 		m.session.CurrentPhase == types.BugPhaseApproveTasks
 }
 
+// isWorkingPhase returns true if current phase is a working phase (not approval)
+func (m *BugModel) isWorkingPhase() bool {
+	return !m.isApprovalPhase() && m.session.CurrentPhase != types.BugPhaseComplete
+}
+
+// advanceToApproval advances from a working phase to its approval phase
+func (m BugModel) advanceToApproval() (BugModel, tea.Cmd) {
+	prevPhase := m.session.CurrentPhase
+	var targetPhase types.BugPhase
+
+	switch m.session.CurrentPhase {
+	case types.BugPhasePlan:
+		targetPhase = types.BugPhaseApprovePlan
+	case types.BugPhaseTasks:
+		targetPhase = types.BugPhaseApproveTasks
+	case types.BugPhaseImplement:
+		// Implement phase goes directly to complete
+		targetPhase = types.BugPhaseComplete
+	default:
+		// Not in a working phase
+		return m, nil
+	}
+
+	return m, func() tea.Msg {
+		return bugPhaseChangedMsg{
+			from: prevPhase,
+			to:   targetPhase,
+		}
+	}
+}
+
+// goBackToWorkingPhase goes back to the working phase (from approval)
+func (m BugModel) goBackToWorkingPhase() (BugModel, tea.Cmd) {
+	prevPhase := m.session.CurrentPhase
+	var targetPhase types.BugPhase
+
+	switch m.session.CurrentPhase {
+	case types.BugPhaseApprovePlan:
+		targetPhase = types.BugPhasePlan
+	case types.BugPhaseApproveTasks:
+		targetPhase = types.BugPhaseTasks
+	default:
+		return m, nil // Not in an approval phase
+	}
+
+	return m, func() tea.Msg {
+		return bugPhaseChangedMsg{
+			from: prevPhase,
+			to:   targetPhase,
+		}
+	}
+}
+
 // approveAndContinue approves the current phase and moves to the next
 func (m BugModel) approveAndContinue() (BugModel, tea.Cmd) {
+	prevPhase := m.session.CurrentPhase
 	nextPhase := m.session.CurrentPhase.GetNextPhase(m.session.CurrentPhase)
-	m.session.CurrentPhase = nextPhase
-	m.session.UpdatedAt = time.Now()
 
-	// Save session state
-	storage.SaveBugSession(m.session)
-
-	// Update preview for new phase
-	m.bugPreview.SetPhase(nextPhase)
-	m.bugPreview.RefreshFromFiles()
-
-	// Update orchestrator with new phase instructions
-	if orch, ok := m.PhaseModel.orchestrator.(*orchestrator.BugOrchestrator); ok {
-		orch.UpdateSession(m.session)
-		orch.SetPlanInstructions(m.getPhaseInstructions())
+	return m, func() tea.Msg {
+		return bugPhaseChangedMsg{
+			from:      prevPhase,
+			to:        nextPhase,
+			saveCheck: true, // Save checkpoint when approving
+		}
 	}
-
-	if nextPhase == types.BugPhaseComplete {
-		m.PhaseModel.quitting = true
-		return m, tea.Quit
-	}
-
-	return m, nil
 }
 
 // goToPreviousPhase goes back to the previous phase
 func (m BugModel) goToPreviousPhase() (BugModel, tea.Cmd) {
-	prevPhase := m.session.CurrentPhase.GetPreviousPhase(m.session.CurrentPhase)
-	m.session.CurrentPhase = prevPhase
-	m.session.UpdatedAt = time.Now()
+	currentPhase := m.session.CurrentPhase
+	targetPhase := m.session.CurrentPhase.GetPreviousPhase(m.session.CurrentPhase)
 
-	// Save session state
-	storage.SaveBugSession(m.session)
-
-	// Update preview for previous phase
-	m.bugPreview.SetPhase(prevPhase)
-	m.bugPreview.RefreshFromFiles()
-
-	// Update orchestrator with previous phase instructions
-	if orch, ok := m.PhaseModel.orchestrator.(*orchestrator.BugOrchestrator); ok {
-		orch.UpdateSession(m.session)
-		orch.SetPlanInstructions(m.getPhaseInstructions())
+	return m, func() tea.Msg {
+		return bugPhaseChangedMsg{
+			from: currentPhase,
+			to:   targetPhase,
+		}
 	}
+}
 
-	return m, nil
+// Message types for phase transitions
+
+// bugPhaseChangedMsg represents a bug workflow phase transition
+type bugPhaseChangedMsg struct {
+	from      types.BugPhase
+	to        types.BugPhase
+	saveCheck bool // whether to save a checkpoint for the 'from' phase
 }
 
 // Message types for agent communication
@@ -373,4 +714,24 @@ type BugPaneType = PaneType
 const (
 	BugChatPane    BugPaneType = ChatPane
 	BugPreviewPane BugPaneType = PreviewPane
+)
+
+// Styles for bug workflow - matching WorkflowModel styles for consistency
+var (
+	bugTitleStyle = lipgloss.NewStyle().
+		Foreground(theme.Primary).
+		Bold(true).
+		Padding(0, 1)
+
+	bugHeaderStyle = lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(theme.Border)
+
+	bugFooterStyle = lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderTop(true).
+		BorderForeground(theme.Border)
+
+	bugContentStyle = lipgloss.NewStyle()
 )
