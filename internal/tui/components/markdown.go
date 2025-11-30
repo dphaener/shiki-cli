@@ -220,6 +220,11 @@ func sekkeiStyle() ansi.StyleConfig {
 		Item: ansi.StylePrimitive{
 			BlockPrefix: "• ",
 		},
+		// Enumeration handles ordered list item formatting
+		// The markdown parser handles numbering, this provides the period and space
+		Enumeration: ansi.StylePrimitive{
+			BlockPrefix: ". ",
+		},
 		Paragraph: ansi.StyleBlock{},
 		Text: ansi.StylePrimitive{},
 		HorizontalRule: ansi.StylePrimitive{
