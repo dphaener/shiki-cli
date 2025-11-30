@@ -105,7 +105,8 @@ func (c ChatView) View() string {
 		return "Initializing chat..."
 	}
 
-	// Only update viewport content if messages have changed or loading state is active
+	// Update viewport content if messages have changed or loading state is active
+	// When loading state is active, always update to refresh spinner animation
 	if c.contentDirty || c.showingLoadingState {
 		chatContent := c.renderMessages()
 		c.viewport.SetContent(chatContent)
@@ -113,7 +114,10 @@ func (c ChatView) View() string {
 		if c.showingLoadingState {
 			c.viewport.GotoBottom()
 		}
-		c.contentDirty = false
+		// Only clear contentDirty if we're not loading (to ensure spinner keeps animating)
+		if !c.showingLoadingState {
+			c.contentDirty = false
+		}
 	}
 
 	// Wrap textarea in a bottom-aligned container so input grows upward
@@ -219,10 +223,8 @@ func (c *ChatView) UpdateLastMessage(content string) {
 
 // AddOrUpdateAssistantMessage adds a new assistant message or updates the last one if it's streaming
 func (c *ChatView) AddOrUpdateAssistantMessage(content string, streaming bool) {
-	// Receiving assistant content means we're no longer waiting
-	if c.showingLoadingState {
-		c.ClearLoadingState()
-	}
+	// Note: Don't clear loading state here - it should persist until the agent turn is completely done
+	// The loading state will be cleared when the turn completes (on "complete" message)
 
 	now := time.Now()
 

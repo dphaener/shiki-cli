@@ -228,5 +228,83 @@ func TestWordWrapWidth(t *testing.T) {
 	}
 }
 
-// Need to import fmt for the test above
-// Let me update the imports at the top
+// TestLoadingStatePersistence tests that loading state persists during assistant messages
+// and only gets cleared when explicitly called
+func TestLoadingStatePersistence(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Set loading state (simulates user sending a message)
+	chatView.SetLoadingState("plan")
+
+	// Verify loading state is active
+	if !chatView.showingLoadingState {
+		t.Error("Loading state should be active after SetLoadingState")
+	}
+
+	// Add assistant message (this used to clear loading state prematurely)
+	chatView.AddOrUpdateAssistantMessage("Here's my response", true)
+
+	// Loading state should still be active - the fix ensures it doesn't get cleared here
+	if !chatView.showingLoadingState {
+		t.Error("Loading state should persist after adding assistant message")
+	}
+
+	// Add more assistant content (simulating streaming)
+	chatView.AddOrUpdateAssistantMessage("Here's my response with more content", true)
+
+	// Loading state should still be active
+	if !chatView.showingLoadingState {
+		t.Error("Loading state should persist after updating assistant message")
+	}
+
+	// Add a tool call (would happen during agent processing)
+	toolMsg := types.ChatMessage{
+		Role:      "assistant",
+		Content:   `Using tool: file_search with {"pattern": "*.go"}`,
+		Timestamp: time.Now(),
+	}
+	chatView.AddToolUse(toolMsg)
+
+	// Loading state should still be active
+	if !chatView.showingLoadingState {
+		t.Error("Loading state should persist after adding tool use")
+	}
+
+	// Only when we explicitly clear loading state should it be removed
+	chatView.ClearLoadingState()
+
+	// Now loading state should be cleared
+	if chatView.showingLoadingState {
+		t.Error("Loading state should be cleared after ClearLoadingState")
+	}
+}
+
+// TestLoadingStateRendering tests that spinner appears in rendered output when loading
+func TestLoadingStateRendering(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Add a regular message first
+	chatView.AddOrUpdateAssistantMessage("Regular message", false)
+
+	// Render without loading state
+	rendered := chatView.renderMessages()
+	if strings.Contains(rendered, "⠋") || strings.Contains(rendered, "⠙") || strings.Contains(rendered, "⠹") {
+		t.Error("Should not show spinner when loading state is inactive")
+	}
+
+	// Set loading state
+	chatView.SetLoadingState("plan")
+
+	// Render with loading state
+	rendered = chatView.renderMessages()
+
+	// Should contain loading message
+	if !strings.Contains(rendered, "Creating implementation plan") {
+		t.Error("Should show loading message when loading state is active")
+	}
+
+	// The spinner character itself may vary due to animation, but the general structure should be there
+	if !strings.Contains(rendered, "Creating") {
+		t.Error("Should contain the loading message text")
+	}
+}
