@@ -3,11 +3,13 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/internal/orchestrator"
+	"github.com/darinhaener/collab/internal/tasks"
 	"github.com/darinhaener/collab/internal/tui/components"
 	"github.com/darinhaener/collab/pkg/types"
 )
@@ -114,6 +116,14 @@ func (m ImplementModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.PhaseModel.Init(),
 		initializeImplementAgent(m.session, m.PhaseModel.eventBus),
+		func() tea.Msg {
+			// Initialize task progress file
+			if err := m.initializeTaskProgress(); err != nil {
+				// Log error but don't fail initialization
+				return TaskProgressInitErrorMsg{Err: err}
+			}
+			return TaskProgressInitializedMsg{}
+		},
 	)
 }
 
@@ -143,6 +153,17 @@ func (m ImplementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ImplementAgentErrorMsg:
 		return m, func() tea.Msg { return PhaseAgentErrorMsg{Err: msg.Err} }
+
+	case TaskProgressInitializedMsg:
+		// Task progress tracking is ready - refresh the preview
+		m.refreshImplementPreview()
+		return m, nil
+
+	case TaskProgressInitErrorMsg:
+		// Task progress initialization failed - show error in preview
+		errorContent := fmt.Sprintf("Task progress initialization failed: %v", msg.Err)
+		m.implementPreview.SetSummary(errorContent)
+		return m, nil
 	}
 
 	// Delegate to PhaseModel
@@ -170,8 +191,20 @@ func (m ImplementModel) ViewContent() string {
 
 // refreshImplementPreview updates the implementation preview
 func (m *ImplementModel) refreshImplementPreview() {
-	// Implementation preview could show task progress, changed files, etc.
-	// For now, just update from any relevant state
+	// Load task progress from progress file if it exists
+	if m.session.FeatureDir != "" {
+		progressFilePath := filepath.Join(m.session.FeatureDir, "task-progress.md")
+
+		// Try to load progress from file
+		if err := m.implementPreview.LoadProgressFromFile(progressFilePath); err != nil {
+			// If loading fails, show error or fallback content
+			fallbackContent := fmt.Sprintf("Task progress tracking not available.\nReason: %v\n\nThe agent will create task-progress.md when implementation begins.", err)
+			m.implementPreview.SetSummary(fallbackContent)
+		}
+	} else {
+		// No feature directory available
+		m.implementPreview.SetSummary("Implementation progress will appear here when the agent begins work.")
+	}
 }
 
 // IsPhaseComplete returns whether implementation is complete
@@ -186,6 +219,31 @@ func (m *ImplementModel) SetTaskProgress(current, total, completed int) {
 	m.completedTasks = completed
 }
 
+// initializeTaskProgress creates initial task-progress.md file if it doesn't exist
+func (m *ImplementModel) initializeTaskProgress() error {
+	if m.session.FeatureDir == "" {
+		return fmt.Errorf("no feature directory available")
+	}
+
+	progressFilePath := filepath.Join(m.session.FeatureDir, "task-progress.md")
+	tasksFilePath := m.session.TasksFile
+
+	// Check if progress file already exists
+	if _, err := os.Stat(progressFilePath); err == nil {
+		// File already exists, just refresh the preview
+		return m.implementPreview.RefreshFromProgressFile()
+	}
+
+	// Create progress file manager and initialize progress file
+	progressManager := tasks.NewProgressFileManager(progressFilePath)
+	if err := progressManager.CreateInitialProgressFile(tasksFilePath); err != nil {
+		return fmt.Errorf("failed to create initial progress file: %w", err)
+	}
+
+	// Load the newly created progress file into the preview
+	return m.implementPreview.LoadProgressFromFile(progressFilePath)
+}
+
 // Message types for agent communication
 
 // ImplementAgentInitializedMsg indicates the agent is ready
@@ -195,6 +253,14 @@ type ImplementAgentInitializedMsg struct {
 
 // ImplementAgentErrorMsg represents an error from the AI agent
 type ImplementAgentErrorMsg struct {
+	Err error
+}
+
+// TaskProgressInitializedMsg indicates task progress tracking is ready
+type TaskProgressInitializedMsg struct{}
+
+// TaskProgressInitErrorMsg represents an error during task progress initialization
+type TaskProgressInitErrorMsg struct {
 	Err error
 }
 
