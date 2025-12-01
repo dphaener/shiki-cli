@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/darinhaener/collab/internal/diff"
 	"github.com/google/uuid"
 )
 
@@ -113,11 +114,12 @@ func (p *ToolCallPart) IsInChain() bool {
 
 // ToolResultPart contains the result of a tool invocation.
 type ToolResultPart struct {
-	ID         string    `json:"id"`
-	ToolCallID string    `json:"tool_call_id"`
-	Content    string    `json:"content"`
-	IsError    bool      `json:"is_error"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID         string         `json:"id"`
+	ToolCallID string         `json:"tool_call_id"`
+	Content    string         `json:"content"`
+	IsError    bool           `json:"is_error"`
+	CreatedAt  time.Time      `json:"created_at"`
+	Diff       *diff.FileDiff `json:"diff,omitempty"` // Optional diff information for Write tool
 }
 
 func (p ToolResultPart) Type() PartType       { return PartTypeToolResult }
@@ -131,6 +133,19 @@ func NewToolResultPart(toolCallID, content string, isError bool) ToolResultPart 
 		Content:    content,
 		IsError:    isError,
 		CreatedAt:  time.Now(),
+		Diff:       nil,
+	}
+}
+
+// NewToolResultPartWithDiff creates a new tool result part with diff information.
+func NewToolResultPartWithDiff(toolCallID, content string, isError bool, fileDiff *diff.FileDiff) ToolResultPart {
+	return ToolResultPart{
+		ID:         uuid.New().String(),
+		ToolCallID: toolCallID,
+		Content:    content,
+		IsError:    isError,
+		CreatedAt:  time.Now(),
+		Diff:       fileDiff,
 	}
 }
 
@@ -202,6 +217,11 @@ func (m *Message) AddToolCall(id, toolName string, input map[string]interface{})
 // AddToolResult is a convenience method to add a tool result part.
 func (m *Message) AddToolResult(toolCallID, content string, isError bool) {
 	m.AddPart(NewToolResultPart(toolCallID, content, isError))
+}
+
+// AddToolResultWithDiff is a convenience method to add a tool result part with diff information.
+func (m *Message) AddToolResultWithDiff(toolCallID, content string, isError bool, fileDiff *diff.FileDiff) {
+	m.AddPart(NewToolResultPartWithDiff(toolCallID, content, isError, fileDiff))
 }
 
 // GetText returns all text content concatenated.

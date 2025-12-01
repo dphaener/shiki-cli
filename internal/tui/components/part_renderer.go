@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/darinhaener/collab/internal/conversation"
+	"github.com/darinhaener/collab/internal/diff"
 	"github.com/darinhaener/collab/internal/tui/theme"
 )
 
@@ -377,6 +378,9 @@ func formatArgValue(value interface{}, maxLen int) string {
 
 // renderToolResultPart renders the result of a tool execution.
 func renderToolResultPart(part conversation.ToolResultPart, width int) string {
+	var result strings.Builder
+
+	// Render the main tool result content
 	style := toolResultStyle
 	prefix := "    └─ Result:"
 	if part.IsError {
@@ -397,12 +401,59 @@ func renderToolResultPart(part conversation.ToolResultPart, width int) string {
 		lines = append(lines, "...")
 	}
 
-	result := prefix + " " + lines[0]
+	toolResult := prefix + " " + lines[0]
 	for i := 1; i < len(lines); i++ {
-		result += "\n             " + lines[i]
+		toolResult += "\n             " + lines[i]
 	}
 
-	return style.Render(result)
+	result.WriteString(style.Render(toolResult))
+
+	// Render diff if present
+	if part.Diff != nil && !part.IsError {
+		diffContent := renderDiff(part.Diff, width)
+		if diffContent != "" {
+			result.WriteString("\n")
+			result.WriteString(diffContent)
+		}
+	}
+
+	return result.String()
+}
+
+// renderDiff renders a file diff with colors and formatting
+func renderDiff(fileDiff *diff.FileDiff, width int) string {
+	if fileDiff == nil {
+		return ""
+	}
+
+	renderer := diff.NewRenderer()
+
+	// Adjust width for diff content (leave some margin)
+	diffWidth := width - 8 // Account for indentation
+	if diffWidth < 40 {
+		diffWidth = 40 // Minimum reasonable width
+	}
+
+	// Set reasonable limits for TUI display
+	renderer.SetMaxLines(50) // Limit to 50 lines for chat display
+	renderer.SetMaxWidth(diffWidth)
+
+	// Format the diff for terminal display
+	formattedDiff := renderer.FormatDiffForTerminal(fileDiff, diffWidth)
+
+	if formattedDiff == "" {
+		return ""
+	}
+
+	// Apply line wrapping if needed
+	wrappedDiff := renderer.ApplyLineWrapping(formattedDiff, diffWidth)
+
+	// Add some padding around the diff content
+	diffStyle := lipgloss.NewStyle().
+		PaddingLeft(1).
+		PaddingRight(1)
+
+	return diffStyle.Render(wrappedDiff)
 }
 
 // renderReasoningPart renders thinking/reasoning content.

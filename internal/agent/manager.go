@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,55 @@ import (
 )
 
 // Note: claude import kept for SDK message types in StartTurn
+
+// ToolExecutionContext captures file state before tool execution for diff generation
+type ToolExecutionContext struct {
+	ToolCallID   string            `json:"tool_call_id"`
+	ToolName     string            `json:"tool_name"`
+	FilePaths    []string          `json:"file_paths"`    // Extracted from tool arguments
+	FileContents map[string]string `json:"file_contents"` // path -> content before modification
+	Timestamp    time.Time         `json:"timestamp"`     // When context was captured
+}
+
+// NewToolExecutionContext creates a new tool execution context
+func NewToolExecutionContext(toolCallID, toolName string) *ToolExecutionContext {
+	return &ToolExecutionContext{
+		ToolCallID:   toolCallID,
+		ToolName:     toolName,
+		FilePaths:    make([]string, 0),
+		FileContents: make(map[string]string),
+		Timestamp:    time.Now(),
+	}
+}
+
+// AddFilePath adds a file path to track and captures its current content
+func (ctx *ToolExecutionContext) AddFilePath(filePath string) error {
+	// Check if file already tracked
+	for _, path := range ctx.FilePaths {
+		if path == filePath {
+			return nil // Already tracked
+		}
+	}
+
+	// Add to tracked paths
+	ctx.FilePaths = append(ctx.FilePaths, filePath)
+
+	// Capture current file content if it exists
+	if content, err := os.ReadFile(filePath); err == nil {
+		ctx.FileContents[filePath] = string(content)
+	} else {
+		// File doesn't exist or can't be read - store empty content
+		ctx.FileContents[filePath] = ""
+	}
+
+	return nil
+}
+
+// GetOriginalContent returns the original content of a file before tool execution
+func (ctx *ToolExecutionContext) GetOriginalContent(filePath string) (string, bool) {
+	content, exists := ctx.FileContents[filePath]
+	return content, exists
+}
 
 // Manager handles agent lifecycle, health monitoring, and turn execution
 type Manager struct {
@@ -26,17 +76,61 @@ type Manager struct {
 	// Health monitoring
 	healthChecks map[string]context.CancelFunc
 	healthMu     sync.Mutex
+
+	// Tool execution context cache for diff generation
+	executionContexts map[string]*ToolExecutionContext
+	contextMu         sync.RWMutex
 }
 
 // NewManager creates a new agent manager
 func NewManager(eventBus *events.EventBus, sessionID, apiKey string) *Manager {
 	return &Manager{
-		agents:       make(map[string]*Agent),
-		eventBus:     eventBus,
-		sessionID:    sessionID,
-		apiKey:       apiKey,
-		healthChecks: make(map[string]context.CancelFunc),
+		agents:            make(map[string]*Agent),
+		eventBus:          eventBus,
+		sessionID:         sessionID,
+		apiKey:            apiKey,
+		healthChecks:      make(map[string]context.CancelFunc),
+		executionContexts: make(map[string]*ToolExecutionContext),
 	}
+}
+
+// storeExecutionContext stores a tool execution context for later retrieval
+func (m *Manager) storeExecutionContext(ctx *ToolExecutionContext) {
+	m.contextMu.Lock()
+	defer m.contextMu.Unlock()
+	m.executionContexts[ctx.ToolCallID] = ctx
+}
+
+// getExecutionContext retrieves a tool execution context by tool call ID
+func (m *Manager) getExecutionContext(toolCallID string) (*ToolExecutionContext, bool) {
+	m.contextMu.RLock()
+	defer m.contextMu.RUnlock()
+	ctx, exists := m.executionContexts[toolCallID]
+	return ctx, exists
+}
+
+// cleanupExecutionContext removes a tool execution context from cache
+func (m *Manager) cleanupExecutionContext(toolCallID string) {
+	m.contextMu.Lock()
+	defer m.contextMu.Unlock()
+	delete(m.executionContexts, toolCallID)
+}
+
+// extractFilePathsFromArgs extracts file paths from Write tool arguments
+func (m *Manager) extractFilePathsFromArgs(toolName string, args map[string]interface{}) []string {
+	var filePaths []string
+
+	// Currently only handle Write tool
+	if toolName != "Write" {
+		return filePaths
+	}
+
+	// Extract file_path parameter
+	if filePath, ok := args["file_path"].(string); ok && filePath != "" {
+		filePaths = append(filePaths, filePath)
+	}
+
+	return filePaths
 }
 
 // SpawnAgent creates and starts a new agent subprocess

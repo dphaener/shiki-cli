@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/darinhaener/collab/internal/broker"
 	"github.com/darinhaener/collab/internal/chatservice"
 	"github.com/darinhaener/collab/internal/conversation"
+	"github.com/darinhaener/collab/internal/diff"
 	"github.com/darinhaener/collab/internal/events"
 	"github.com/darinhaener/collab/pkg/types"
 )
@@ -39,6 +41,10 @@ type ChatManager struct {
 	// Current streaming messages per agent
 	streamingMsgs map[string]string // agentID -> messageID
 	streamMu      sync.RWMutex
+
+	// Tool execution context cache for diff generation
+	executionContexts map[string]*ToolExecutionContext
+	contextMu         sync.RWMutex
 }
 
 // NewChatManager creates a new chat-aware agent manager.
@@ -49,15 +55,122 @@ func NewChatManager(
 	legacyBus *events.EventBus,
 ) *ChatManager {
 	return &ChatManager{
-		agents:        make(map[string]*Agent),
-		sessionID:     sessionID,
-		apiKey:        apiKey,
-		broker:        broker,
-		messageSvc:    messageSvc,
-		legacyBus:     legacyBus,
-		healthChecks:  make(map[string]context.CancelFunc),
-		streamingMsgs: make(map[string]string),
+		agents:            make(map[string]*Agent),
+		sessionID:         sessionID,
+		apiKey:            apiKey,
+		broker:            broker,
+		messageSvc:        messageSvc,
+		legacyBus:         legacyBus,
+		healthChecks:      make(map[string]context.CancelFunc),
+		streamingMsgs:     make(map[string]string),
+		executionContexts: make(map[string]*ToolExecutionContext),
 	}
+}
+
+// storeExecutionContext stores a tool execution context for later retrieval
+func (m *ChatManager) storeExecutionContext(ctx *ToolExecutionContext) {
+	m.contextMu.Lock()
+	defer m.contextMu.Unlock()
+	m.executionContexts[ctx.ToolCallID] = ctx
+}
+
+// getExecutionContext retrieves a tool execution context by tool call ID
+func (m *ChatManager) getExecutionContext(toolCallID string) (*ToolExecutionContext, bool) {
+	m.contextMu.RLock()
+	defer m.contextMu.RUnlock()
+	ctx, exists := m.executionContexts[toolCallID]
+	return ctx, exists
+}
+
+// cleanupExecutionContext removes a tool execution context from cache
+func (m *ChatManager) cleanupExecutionContext(toolCallID string) {
+	m.contextMu.Lock()
+	defer m.contextMu.Unlock()
+	delete(m.executionContexts, toolCallID)
+}
+
+// extractFilePathsFromArgs extracts file paths from Write tool arguments
+func (m *ChatManager) extractFilePathsFromArgs(toolName string, args map[string]interface{}) []string {
+	var filePaths []string
+
+	// Currently only handle Write tool
+	if toolName != "Write" {
+		return filePaths
+	}
+
+	// Extract file_path parameter
+	if filePath, ok := args["file_path"].(string); ok && filePath != "" {
+		filePaths = append(filePaths, filePath)
+	}
+
+	return filePaths
+}
+
+// captureToolExecutionContext captures file state before tool execution
+func (m *ChatManager) captureToolExecutionContext(toolCallID, toolName string, args map[string]interface{}) {
+	// Extract file paths from tool arguments
+	filePaths := m.extractFilePathsFromArgs(toolName, args)
+	if len(filePaths) == 0 {
+		return // No files to track
+	}
+
+	// Create execution context
+	execCtx := NewToolExecutionContext(toolCallID, toolName)
+
+	// Capture file content for each path
+	for _, filePath := range filePaths {
+		if err := execCtx.AddFilePath(filePath); err != nil {
+			// Log error but continue with other files
+			// Note: Could add structured logging here
+		}
+	}
+
+	// Store context for later retrieval
+	m.storeExecutionContext(execCtx)
+}
+
+// generateDiffForToolResult generates a diff for Write tool results
+func (m *ChatManager) generateDiffForToolResult(toolCallID string) *diff.FileDiff {
+	// Retrieve execution context
+	execCtx, exists := m.getExecutionContext(toolCallID)
+	if !exists || execCtx.ToolName != "Write" {
+		return nil // Only generate diffs for Write tools
+	}
+
+	// We expect exactly one file path for Write tool
+	if len(execCtx.FilePaths) != 1 {
+		return nil
+	}
+
+	filePath := execCtx.FilePaths[0]
+	originalContent, exists := execCtx.GetOriginalContent(filePath)
+	if !exists {
+		return nil
+	}
+
+	// Read current file content after tool execution
+	var newContent string
+	if content, err := os.ReadFile(filePath); err == nil {
+		newContent = string(content)
+	} else {
+		// File might have been deleted or is inaccessible
+		newContent = ""
+	}
+
+	// Generate diff using the diff package
+	generator := diff.NewGenerator()
+	fileDiff, err := generator.GenerateUnifiedDiff(originalContent, newContent, filePath)
+	if err != nil {
+		// Log error but don't fail the tool result processing
+		return nil
+	}
+
+	// Only return diff if there are actual changes
+	if fileDiff.UnifiedDiff == "" && originalContent == newContent {
+		return nil
+	}
+
+	return fileDiff
 }
 
 // SpawnAgent creates and starts a new agent subprocess.
@@ -256,6 +369,9 @@ func (m *ChatManager) StartTurn(ctx context.Context, agentID, query string, turn
 									}
 								}
 
+								// Capture file state before tool execution for diff generation
+								m.captureToolExecutionContext(content.ID, displayName, toolArgs)
+
 								// Add tool call part to message
 								toolCallPart := conversation.NewToolCallPart(content.ID, displayName, toolArgs)
 								m.messageSvc.AddPart(turnCtx, msg.ID, toolCallPart)
@@ -278,6 +394,43 @@ func (m *ChatManager) StartTurn(ctx context.Context, agentID, query string, turn
 						if usage.InputTokens > 0 || usage.OutputTokens > 0 {
 							totalInputTokens += usage.InputTokens
 							totalOutputTokens += usage.OutputTokens
+						}
+					}
+
+				case "user":
+					// User messages contain tool results
+					if userMsg, ok := sdkMsg.(*claude.SDKUserMessage); ok {
+						for _, block := range userMsg.Message.Content {
+							if toolResult, ok := block.(claude.ToolResultContentBlock); ok {
+								// Extract tool result content
+								var contentStr string
+								if toolResult.Content != nil {
+									if toolResult.Content.Text != nil {
+										contentStr = *toolResult.Content.Text
+									} else if len(toolResult.Content.Blocks) > 0 {
+										for _, b := range toolResult.Content.Blocks {
+											if textBlock, ok := b.(claude.TextContentBlock); ok {
+												contentStr += textBlock.Text
+											}
+										}
+									}
+								}
+
+								// Generate diff if this was a Write tool execution
+								fileDiff := m.generateDiffForToolResult(toolResult.ToolUseID)
+
+								// Add tool result part to message (with or without diff)
+								var toolResultPart conversation.ToolResultPart
+								if fileDiff != nil {
+									toolResultPart = conversation.NewToolResultPartWithDiff(toolResult.ToolUseID, contentStr, toolResult.IsError, fileDiff)
+								} else {
+									toolResultPart = conversation.NewToolResultPart(toolResult.ToolUseID, contentStr, toolResult.IsError)
+								}
+								m.messageSvc.AddPart(turnCtx, msg.ID, toolResultPart)
+
+								// Clean up execution context
+								m.cleanupExecutionContext(toolResult.ToolUseID)
+							}
 						}
 					}
 
