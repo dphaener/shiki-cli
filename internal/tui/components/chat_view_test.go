@@ -308,3 +308,242 @@ func TestLoadingStateRendering(t *testing.T) {
 		t.Error("Should contain the loading message text")
 	}
 }
+
+// TestChatView_ResetScrollState tests the ResetScrollState method functionality
+func TestChatView_ResetScrollState(t *testing.T) {
+	cv := NewChatView(80, 24)
+
+	// Add some messages to simulate a conversation
+	cv.AddMessage(types.ChatMessage{
+		Role:      "user",
+		Content:   "Test message 1",
+		Timestamp: time.Now(),
+	})
+	cv.AddMessage(types.ChatMessage{
+		Role:      "assistant",
+		Content:   "Test response 1",
+		Timestamp: time.Now(),
+	})
+
+	// Simulate some corrupted state
+	cv.isStreaming = true
+	cv.showingLoadingState = true
+	cv.contentDirty = true
+
+	// Reset should fix all state
+	cv.ResetScrollState()
+
+	// Verify state is clean
+	if cv.isStreaming {
+		t.Error("isStreaming should be false after ResetScrollState")
+	}
+	if cv.showingLoadingState {
+		t.Error("showingLoadingState should be false after ResetScrollState")
+	}
+	if cv.contentDirty {
+		t.Error("contentDirty should be false after ResetScrollState")
+	}
+
+	// Verify viewport state is reset
+	if cv.viewport.YPosition != 0 {
+		t.Errorf("viewport.YPosition should be 0, got %d", cv.viewport.YPosition)
+	}
+
+	// Verify viewport dimensions are preserved
+	expectedHeight := cv.height - 1 - maxInputHeight
+	if expectedHeight < 3 {
+		expectedHeight = 3
+	}
+	if cv.viewport.Height != expectedHeight {
+		t.Errorf("viewport height should be %d, got %d", expectedHeight, cv.viewport.Height)
+	}
+	if cv.viewport.Width != cv.width-4 {
+		t.Errorf("viewport width should be %d, got %d", cv.width-4, cv.viewport.Width)
+	}
+}
+
+// TestChatView_ResetScrollStateEmptyMessages tests reset with empty message list
+func TestChatView_ResetScrollStateEmptyMessages(t *testing.T) {
+	cv := NewChatView(80, 24)
+
+	// Reset with no messages should not panic
+	cv.ResetScrollState()
+
+	// Verify clean state
+	if cv.isStreaming {
+		t.Error("isStreaming should be false after ResetScrollState")
+	}
+	if cv.showingLoadingState {
+		t.Error("showingLoadingState should be false after ResetScrollState")
+	}
+	if cv.contentDirty {
+		t.Error("contentDirty should be false after ResetScrollState")
+	}
+}
+
+// TestChatView_ResetScrollStateMultipleCalls tests that reset is safe to call multiple times
+func TestChatView_ResetScrollStateMultipleCalls(t *testing.T) {
+	cv := NewChatView(80, 24)
+
+	// Add a message
+	cv.AddMessage(types.ChatMessage{
+		Role:      "user",
+		Content:   "Test message",
+		Timestamp: time.Now(),
+	})
+
+	// Reset multiple times should be safe
+	cv.ResetScrollState()
+	cv.ResetScrollState()
+	cv.ResetScrollState()
+
+	// State should still be clean
+	if cv.isStreaming || cv.showingLoadingState || cv.contentDirty {
+		t.Error("Multiple resets should maintain clean state")
+	}
+}
+
+// TestChatView_ResetToBottom tests the ResetToBottom method
+func TestChatView_ResetToBottom(t *testing.T) {
+	cv := NewChatView(80, 24)
+
+	// Add messages
+	for i := 0; i < 10; i++ {
+		cv.AddMessage(types.ChatMessage{
+			Role:      "user",
+			Content:   fmt.Sprintf("Test message %d", i),
+			Timestamp: time.Now(),
+		})
+	}
+
+	// ResetToBottom should set contentDirty and go to bottom
+	cv.ResetToBottom()
+
+	if !cv.contentDirty {
+		t.Error("contentDirty should be true after ResetToBottom")
+	}
+
+	// Viewport should be at bottom (this is handled by the GotoBottom call internally)
+	// We can't easily test the exact position without more viewport internals,
+	// but we can verify the method doesn't panic
+}
+
+// TestAgentOutputState_ResetScrollState tests AgentOutputState reset functionality
+func TestAgentOutputState_ResetScrollState(t *testing.T) {
+	state := &AgentOutputState{
+		ScrollOffset: 50,
+		AutoScroll:   false,
+	}
+
+	// Reset should clean state
+	state.ResetScrollState()
+
+	if state.ScrollOffset != 0 {
+		t.Errorf("ScrollOffset should be 0 after reset, got %d", state.ScrollOffset)
+	}
+	if !state.AutoScroll {
+		t.Error("AutoScroll should be true after reset")
+	}
+}
+
+// TestAgentOutputState_ValidateScrollState tests scroll state validation
+func TestAgentOutputState_ValidateScrollState(t *testing.T) {
+	tests := []struct {
+		name               string
+		initialOffset      int
+		initialAutoScroll  bool
+		totalLines         int
+		height             int
+		expectedOffset     int
+		expectedAutoScroll bool
+	}{
+		{
+			name:               "Valid state - no changes",
+			initialOffset:      5,
+			initialAutoScroll:  false,
+			totalLines:         100,
+			height:             20,
+			expectedOffset:     5,
+			expectedAutoScroll: false,
+		},
+		{
+			name:               "Negative offset correction",
+			initialOffset:      -10,
+			initialAutoScroll:  false,
+			totalLines:         100,
+			height:             20,
+			expectedOffset:     0,
+			expectedAutoScroll: false, // At top, autoscroll should remain disabled
+		},
+		{
+			name:               "Offset too high correction",
+			initialOffset:      999,
+			initialAutoScroll:  false,
+			totalLines:         100,
+			height:             20,
+			expectedOffset:     80, // 100 - 20
+			expectedAutoScroll: true, // At bottom, so autoscroll enabled
+		},
+		{
+			name:               "At bottom - enable autoscroll",
+			initialOffset:      80,
+			initialAutoScroll:  false,
+			totalLines:         100,
+			height:             20,
+			expectedOffset:     80,
+			expectedAutoScroll: true,
+		},
+		{
+			name:               "Content smaller than height",
+			initialOffset:      10,
+			initialAutoScroll:  false,
+			totalLines:         5,
+			height:             20,
+			expectedOffset:     0,
+			expectedAutoScroll: true, // Always at bottom when content is small
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := &AgentOutputState{
+				ScrollOffset: tt.initialOffset,
+				AutoScroll:   tt.initialAutoScroll,
+			}
+
+			state.ValidateScrollState(tt.totalLines, tt.height)
+
+			if state.ScrollOffset != tt.expectedOffset {
+				t.Errorf("ScrollOffset = %d, expected %d", state.ScrollOffset, tt.expectedOffset)
+			}
+			if state.AutoScroll != tt.expectedAutoScroll {
+				t.Errorf("AutoScroll = %t, expected %t", state.AutoScroll, tt.expectedAutoScroll)
+			}
+		})
+	}
+}
+
+// TestAgentOutputState_ValidateScrollStateIdempotent tests that validation is idempotent
+func TestAgentOutputState_ValidateScrollStateIdempotent(t *testing.T) {
+	state := &AgentOutputState{
+		ScrollOffset: 999, // Invalid offset
+		AutoScroll:   false,
+	}
+
+	// Validate multiple times
+	state.ValidateScrollState(100, 20)
+	firstOffset := state.ScrollOffset
+	firstAutoScroll := state.AutoScroll
+
+	state.ValidateScrollState(100, 20)
+	secondOffset := state.ScrollOffset
+	secondAutoScroll := state.AutoScroll
+
+	// Should be identical
+	if firstOffset != secondOffset {
+		t.Errorf("Validation not idempotent: offset changed from %d to %d", firstOffset, secondOffset)
+	}
+	if firstAutoScroll != secondAutoScroll {
+		t.Errorf("Validation not idempotent: autoscroll changed from %t to %t", firstAutoScroll, secondAutoScroll)
+	}
+}

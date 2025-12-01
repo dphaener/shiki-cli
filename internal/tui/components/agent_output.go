@@ -62,6 +62,32 @@ func (s *AgentOutputState) MarkPreviousToolsReplaced(currentTurn int) {
 	}
 }
 
+// ResetScrollState ensures clean scroll state for agent output
+func (state *AgentOutputState) ResetScrollState() {
+	state.AutoScroll = true
+	state.ScrollOffset = 0
+}
+
+// ValidateScrollState checks and fixes inconsistent scroll state
+func (state *AgentOutputState) ValidateScrollState(totalLines, height int) {
+	// Ensure scroll offset is within valid bounds
+	maxOffset := totalLines - height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+
+	if state.ScrollOffset < 0 {
+		state.ScrollOffset = 0
+	} else if state.ScrollOffset > maxOffset {
+		state.ScrollOffset = maxOffset
+	}
+
+	// Re-enable auto-scroll if we're at the bottom
+	if state.ScrollOffset >= maxOffset {
+		state.AutoScroll = true
+	}
+}
+
 // Styles for agent output using Sekkei Design System theme
 var (
 	agentHeaderStyle = lipgloss.NewStyle().

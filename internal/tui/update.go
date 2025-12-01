@@ -307,6 +307,36 @@ func (m Model) handleEvent(event events.Event) (tea.Model, tea.Cmd) {
 		// Don't wait for more events when paused
 		return m, nil
 
+	case types.EventSessionResumed:
+		// Reset all viewport components to ensure clean state
+		// This fixes the scroll bug that occurs after resumption
+
+		// Reset each agent's output state
+		for _, agentState := range m.agentOutputs {
+			if agentState != nil {
+				// Reset auto-scroll and scroll offset
+				agentState.ResetScrollState()
+			}
+		}
+
+		// Reset file view scroll state
+		m.scrollOffset = 0
+
+		// Reset selected positions to latest turn
+		if len(m.turnHistory) > 0 {
+			m.selectedTurn = len(m.turnHistory) - 1
+		}
+
+		// Update session status
+		m.session.Status = types.SessionRunning
+		m.paused = false
+
+		// Force re-render of all viewport content
+		return m, tea.Batch(
+			loadFileContent(m.workspaceDir, m.currentFile),
+			waitForEvent(m.eventSub),
+		)
+
 	case types.EventSessionError:
 		payload := event.Payload.(events.SessionErrorPayload)
 		m.session.Status = types.SessionError

@@ -368,7 +368,7 @@ func TestUpdate_EventSessionPaused(t *testing.T) {
 
 	assert.Equal(t, types.SessionPaused, m.session.Status)
 	assert.True(t, m.paused)
-	assert.NotNil(t, cmd)
+	assert.Nil(t, cmd) // Don't continue listening when paused
 }
 
 func TestUpdate_EventSessionError(t *testing.T) {
@@ -391,7 +391,7 @@ func TestUpdate_EventSessionError(t *testing.T) {
 	assert.Equal(t, types.SessionError, m.session.Status)
 	assert.NotNil(t, m.err)
 	assert.Equal(t, "Test error", m.err.Error())
-	assert.NotNil(t, cmd)
+	assert.Nil(t, cmd) // Don't continue listening on error
 }
 
 func TestUpdate_WindowSizeMsg(t *testing.T) {
@@ -442,4 +442,166 @@ func TestMaxMin(t *testing.T) {
 func TestPauseError(t *testing.T) {
 	err := &pauseError{msg: "test error"}
 	assert.Equal(t, "test error", err.Error())
+}
+
+// TestUpdate_EventSessionResumed tests the session resume event handling and viewport state reset
+func TestUpdate_EventSessionResumed(t *testing.T) {
+	tmpDir := t.TempDir()
+	bus := mockEventBus()
+	session := mockSession(tmpDir)
+
+	// Add some turn history to test turn selection reset
+	session.TurnHistory = []types.Turn{
+		{Number: 1, AgentID: "agent1", Status: types.TurnCompleted},
+		{Number: 2, AgentID: "agent2", Status: types.TurnCompleted},
+		{Number: 3, AgentID: "agent1", Status: types.TurnCompleted},
+	}
+
+	model := NewModel(session, bus)
+
+	// Set up some corrupted scroll state to simulate the bug
+	agentID := model.activeAgents[0]
+	model.agentOutputs[agentID].ScrollOffset = 50   // Corrupted scroll offset
+	model.agentOutputs[agentID].AutoScroll = false  // Disabled auto-scroll
+	model.scrollOffset = 25                         // File view scroll offset
+	model.selectedTurn = 0                         // Not at latest turn
+	model.session.Status = types.SessionPaused     // Paused session
+	model.paused = true
+
+	// Create SessionResumed event
+	event := events.Event{
+		Type: types.EventSessionResumed,
+		Payload: events.SessionResumedPayload{
+			Session: model.session,
+		},
+	}
+
+	// Handle event
+	updatedModel, cmd := model.handleEvent(event)
+	m := updatedModel.(Model)
+
+	// Verify session status and paused state are updated
+	assert.Equal(t, types.SessionRunning, m.session.Status)
+	assert.False(t, m.paused)
+
+	// Verify agent viewport states are reset
+	agentState := m.agentOutputs[agentID]
+	assert.Equal(t, 0, agentState.ScrollOffset, "Agent scroll offset should be reset to 0")
+	assert.True(t, agentState.AutoScroll, "Agent auto-scroll should be enabled")
+
+	// Verify file view scroll state is reset
+	assert.Equal(t, 0, m.scrollOffset, "File scroll offset should be reset to 0")
+
+	// Verify turn selection is reset to latest turn
+	assert.Equal(t, 2, m.selectedTurn, "Selected turn should be reset to latest turn (index 2)")
+
+	// Should return commands for content refresh and event listening
+	assert.NotNil(t, cmd)
+}
+
+// TestUpdate_EventSessionResumedMultipleAgents tests resume with multiple agents
+func TestUpdate_EventSessionResumedMultipleAgents(t *testing.T) {
+	tmpDir := t.TempDir()
+	bus := mockEventBus()
+	session := mockSession(tmpDir)
+	model := NewModel(session, bus)
+
+	// Should have 2 agents from mockSession
+	require.Len(t, model.activeAgents, 2)
+
+	// Corrupt scroll state for both agents
+	for _, agentID := range model.activeAgents {
+		model.agentOutputs[agentID].ScrollOffset = 100
+		model.agentOutputs[agentID].AutoScroll = false
+	}
+
+	// Create SessionResumed event
+	event := events.Event{
+		Type: types.EventSessionResumed,
+		Payload: events.SessionResumedPayload{
+			Session: model.session,
+		},
+	}
+
+	// Handle event
+	updatedModel, cmd := model.handleEvent(event)
+	m := updatedModel.(Model)
+
+	// Verify all agent states are reset
+	for _, agentID := range m.activeAgents {
+		agentState := m.agentOutputs[agentID]
+		assert.Equal(t, 0, agentState.ScrollOffset,
+			"Agent %s scroll offset should be reset", agentID)
+		assert.True(t, agentState.AutoScroll,
+			"Agent %s auto-scroll should be enabled", agentID)
+	}
+
+	assert.NotNil(t, cmd)
+}
+
+// TestUpdate_EventSessionResumedEmptyTurnHistory tests resume with no turn history
+func TestUpdate_EventSessionResumedEmptyTurnHistory(t *testing.T) {
+	tmpDir := t.TempDir()
+	bus := mockEventBus()
+	session := mockSession(tmpDir)
+	session.TurnHistory = []types.Turn{} // Empty turn history
+
+	model := NewModel(session, bus)
+	model.selectedTurn = -1 // Invalid initial state
+
+	// Create SessionResumed event
+	event := events.Event{
+		Type: types.EventSessionResumed,
+		Payload: events.SessionResumedPayload{
+			Session: model.session,
+		},
+	}
+
+	// Handle event - should not panic with empty turn history
+	updatedModel, cmd := model.handleEvent(event)
+	m := updatedModel.(Model)
+
+	// selectedTurn should remain unchanged when no turns exist
+	assert.Equal(t, -1, m.selectedTurn)
+	assert.NotNil(t, cmd)
+}
+
+// TestUpdate_EventSessionResumedStateConsistency tests that resume event maintains state consistency
+func TestUpdate_EventSessionResumedStateConsistency(t *testing.T) {
+	tmpDir := t.TempDir()
+	bus := mockEventBus()
+	session := mockSession(tmpDir)
+	model := NewModel(session, bus)
+
+	// Set initial state
+	agentID := model.activeAgents[0]
+	initialOutputCount := len(model.agentOutputs[agentID].Outputs)
+	model.width = 100
+	model.height = 50
+
+	// Create SessionResumed event
+	event := events.Event{
+		Type: types.EventSessionResumed,
+		Payload: events.SessionResumedPayload{
+			Session: model.session,
+		},
+	}
+
+	// Handle event
+	updatedModel, cmd := model.handleEvent(event)
+	m := updatedModel.(Model)
+
+	// Verify non-scroll state is preserved
+	assert.Equal(t, 100, m.width, "Window width should be preserved")
+	assert.Equal(t, 50, m.height, "Window height should be preserved")
+	assert.Len(t, m.activeAgents, 2, "Agent list should be preserved")
+	assert.Equal(t, initialOutputCount, len(m.agentOutputs[agentID].Outputs),
+		"Agent output history should be preserved")
+
+	// Verify only scroll-related state is reset
+	assert.Equal(t, 0, m.agentOutputs[agentID].ScrollOffset)
+	assert.True(t, m.agentOutputs[agentID].AutoScroll)
+	assert.Equal(t, 0, m.scrollOffset)
+
+	assert.NotNil(t, cmd)
 }

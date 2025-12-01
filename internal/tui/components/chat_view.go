@@ -539,3 +539,34 @@ func (c *ChatView) adjustTextareaHeight() {
 		c.textarea.SetHeight(maxInputHeight)
 	}
 }
+
+// ResetScrollState completely reinitializes the viewport state
+func (c *ChatView) ResetScrollState() {
+	// Calculate viewport height same as SetSize method
+	viewportHeight := c.height - 1 - maxInputHeight
+	if viewportHeight < 3 {
+		viewportHeight = 3
+	}
+
+	// Recreate viewport with current dimensions to clear internal state
+	c.viewport = viewport.New(c.width-4, viewportHeight)
+	c.viewport.YPosition = 0
+
+	// Refresh content and scroll to bottom
+	if len(c.messages) > 0 {
+		chatContent := c.renderMessages()
+		c.viewport.SetContent(chatContent)
+		c.viewport.GotoBottom()
+	}
+
+	// Reset streaming and loading states
+	c.isStreaming = false
+	c.showingLoadingState = false
+	c.contentDirty = false
+}
+
+// ResetToBottom forces scroll to bottom and re-enables auto-scroll behavior
+func (c *ChatView) ResetToBottom() {
+	c.viewport.GotoBottom()
+	c.contentDirty = true
+}
