@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/darinhaener/collab/internal/cli"
+	"github.com/dphaener/shiki-cli/internal/cli"
 	"github.com/spf13/cobra"
 )
 
@@ -17,17 +17,17 @@ func newCompletionCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "completion [bash|zsh|fish|powershell]",
 		Short: "Generate shell completion scripts",
-		Long: `Generate shell completion scripts for collab.
+		Long: `Generate shell completion scripts for shiki.
 
 To load completions:
 
 Bash:
-  $ source <(collab completion bash)
+  $ source <(shiki completion bash)
   # To load completions for each session, execute once:
   # Linux:
-  $ collab completion bash > /etc/bash_completion.d/collab
+  $ shiki completion bash > /etc/bash_completion.d/shiki
   # macOS:
-  $ collab completion bash > $(brew --prefix)/etc/bash_completion.d/collab
+  $ shiki completion bash > $(brew --prefix)/etc/bash_completion.d/shiki
 
 Zsh:
   # If shell completion is not already enabled in your environment,
@@ -35,18 +35,18 @@ Zsh:
   $ echo "autoload -U compinit; compinit" >> ~/.zshrc
 
   # To load completions for each session, execute once:
-  $ collab completion zsh > "${fpath[1]}/_collab"
+  $ shiki completion zsh > "${fpath[1]}/_shiki"
   # You will need to start a new shell for this setup to take effect.
 
 Fish:
-  $ collab completion fish | source
+  $ shiki completion fish | source
   # To load completions for each session, execute once:
-  $ collab completion fish > ~/.config/fish/completions/collab.fish
+  $ shiki completion fish > ~/.config/fish/completions/shiki.fish
 
 PowerShell:
-  PS> collab completion powershell | Out-String | Invoke-Expression
+  PS> shiki completion powershell | Out-String | Invoke-Expression
   # To load completions for every new session, run:
-  PS> collab completion powershell > collab.ps1
+  PS> shiki completion powershell > shiki.ps1
   # and source this file from your PowerShell profile.
 `,
 		DisableFlagsInUseLine: true,
@@ -71,12 +71,12 @@ PowerShell:
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "collab",
-		Short: "Multi-agent AI collaboration orchestrator",
-		Long: `collab is a CLI tool for orchestrating two-agent AI collaborations via file-based communication.
+		Use:   "shiki",
+		Short: "Spec-driven development with AI agent orchestration",
+		Long: `shiki is a CLI tool for spec-driven development and AI agent orchestration.
 
-It manages turn-based execution, real-time monitoring, and automatic completion detection
-when both agents reach consensus on a deliverable.`,
+It manages structured workflows (research → plan → implement → review → ship),
+turn-based multi-agent collaboration, and real-time monitoring.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -84,8 +84,8 @@ when both agents reach consensus on a deliverable.`,
 	// Global flags
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose logging")
 	rootCmd.PersistentFlags().Bool("no-color", false, "Disable colored output")
-	rootCmd.PersistentFlags().StringP("config", "c", "", "Config file path (default: ~/.config/collab-cli/config.json)")
-	rootCmd.PersistentFlags().StringP("workspace", "w", "", "Workspace directory (default: ~/.local/share/collab-cli/sessions)")
+	rootCmd.PersistentFlags().StringP("config", "c", "", "Config file path (default: ~/.config/shiki-cli/config.json)")
+	rootCmd.PersistentFlags().StringP("workspace", "w", "", "Workspace directory (default: ~/.local/share/shiki-cli/sessions)")
 
 	// Add commands
 	rootCmd.AddCommand(cli.NewRunCommand())

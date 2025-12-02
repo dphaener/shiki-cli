@@ -1,6 +1,6 @@
 package template
 
-import "github.com/darinhaener/collab/internal/storage"
+import "github.com/dphaener/shiki-cli/internal/storage"
 
 // TaskTemplate represents a task template with YAML frontmatter
 type TaskTemplate struct {

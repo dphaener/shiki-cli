@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // MessageFrontmatter is the YAML header for message files

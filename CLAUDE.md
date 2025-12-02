@@ -1,6 +1,6 @@
-# Collab - Development Guidelines
+# Shiki - Development Guidelines
 
-**Project**: Collab
+**Project**: Shiki
 **Description**: CLI tool for orchestrating AI agent collaborations
 
 ## Development Guidelines

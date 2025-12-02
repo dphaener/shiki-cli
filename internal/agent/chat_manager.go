@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
-	"github.com/darinhaener/collab/internal/broker"
-	"github.com/darinhaener/collab/internal/chatservice"
-	"github.com/darinhaener/collab/internal/conversation"
-	"github.com/darinhaener/collab/internal/diff"
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/broker"
+	"github.com/dphaener/shiki-cli/internal/chatservice"
+	"github.com/dphaener/shiki-cli/internal/conversation"
+	"github.com/dphaener/shiki-cli/internal/diff"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // ChatManager handles agent lifecycle with the new chat infrastructure.

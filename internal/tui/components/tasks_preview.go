@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/darinhaener/collab/internal/tui/theme"
+	"github.com/dphaener/shiki-cli/internal/tui/theme"
 )
 
 // TasksPreview displays a preview of the generated tasks.md file

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/darinhaener/collab/internal/broker"
+	"github.com/dphaener/shiki-cli/internal/broker"
 )
 
 // ComplianceMonitor tracks agent compliance with task progress tracking requirements

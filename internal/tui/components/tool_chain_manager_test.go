@@ -3,7 +3,7 @@ package components
 import (
 	"testing"
 
-	"github.com/darinhaener/collab/internal/broker"
+	"github.com/dphaener/shiki-cli/internal/broker"
 )
 
 func TestToolChainManager_Basic(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/darinhaener/collab/internal/conversation"
-	"github.com/darinhaener/collab/internal/diff"
+	"github.com/dphaener/shiki-cli/internal/conversation"
+	"github.com/dphaener/shiki-cli/internal/diff"
 )
 
 func TestRenderToolResultPart_WithDiff(t *testing.T) {

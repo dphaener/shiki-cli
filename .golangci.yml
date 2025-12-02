@@ -11,7 +11,7 @@ linters-settings:
   lll:
     line-length: 140
   goimports:
-    local-prefixes: github.com/darinhaener/collab
+    local-prefixes: github.com/dphaener/shiki-cli
   gocritic:
     enabled-tags:
       - diagnostic

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darinhaener/collab/internal/diff"
+	"github.com/dphaener/shiki-cli/internal/diff"
 	"github.com/google/uuid"
 )
 

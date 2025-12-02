@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/darinhaener/collab/internal/conversation"
-	"github.com/darinhaener/collab/internal/diff"
-	"github.com/darinhaener/collab/internal/tui/theme"
+	"github.com/dphaener/shiki-cli/internal/conversation"
+	"github.com/dphaener/shiki-cli/internal/diff"
+	"github.com/dphaener/shiki-cli/internal/tui/theme"
 )
 
 // Part rendering styles using Sekkei Design System theme

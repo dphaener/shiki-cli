@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for 80x24 terminal minimum
 
 **Storage System**
-- XDG-compliant directories (~/.config/collab-cli, ~/.local/share/collab-cli)
+- XDG-compliant directories (~/.config/shiki-cli, ~/.local/share/shiki-cli)
 - Atomic writes for all file operations (prevents corruption)
 - File permissions: directories 0700, files 0600 (user-only)
 - Workspace structure:
@@ -87,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Configuration**
 - Priority hierarchy: CLI flags > env vars > config file > defaults
-- Config file: `~/.config/collab-cli/config.json`
+- Config file: `~/.config/shiki-cli/config.json`
 - Configurable fields: workspace_dir, log_level, default_timeout, anthropic_api_key
 - Environment variable support: `ANTHROPIC_API_KEY`, `COLLAB_WORKSPACE_DIR`, etc.
 

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/darinhaener/collab/internal/conversation"
+	"github.com/dphaener/shiki-cli/internal/conversation"
 )
 
 // ErrNotFound is returned when an entity is not found.

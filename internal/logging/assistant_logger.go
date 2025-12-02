@@ -6,9 +6,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/darinhaener/collab/internal/config"
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/config"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // AssistantEventLogger subscribes to EventBus and writes only assistant events to assistant.log

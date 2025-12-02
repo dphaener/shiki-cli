@@ -9,13 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/internal/logging"
-	"github.com/darinhaener/collab/internal/orchestrator"
-	"github.com/darinhaener/collab/internal/storage"
-	"github.com/darinhaener/collab/internal/template"
-	"github.com/darinhaener/collab/internal/tui"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/internal/logging"
+	"github.com/dphaener/shiki-cli/internal/orchestrator"
+	"github.com/dphaener/shiki-cli/internal/storage"
+	"github.com/dphaener/shiki-cli/internal/template"
+	"github.com/dphaener/shiki-cli/internal/tui"
+	"github.com/dphaener/shiki-cli/pkg/types"
 	"github.com/spf13/cobra"
 )
 

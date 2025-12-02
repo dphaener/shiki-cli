@@ -4,10 +4,10 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/darinhaener/collab/internal/broker"
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/internal/tui/components"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/broker"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/internal/tui/components"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // Update handles messages and updates model state (Bubbletea Update function)

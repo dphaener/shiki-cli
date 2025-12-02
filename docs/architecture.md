@@ -48,7 +48,7 @@ Collab is a production-ready Go CLI tool that orchestrates collaboration between
 
 ## Core Components
 
-### 1. CLI Layer (`cmd/collab/`, `internal/cli/`)
+### 1. CLI Layer (`cmd/shiki/`, `internal/cli/`)
 
 **Responsibility**: User interaction, command parsing, and output formatting.
 
@@ -66,7 +66,7 @@ Collab is a production-ready Go CLI tool that orchestrates collaboration between
 - `version` - Display version info
 
 **Key Files**:
-- `cmd/collab/main.go` - Entry point, root command setup
+- `cmd/shiki/main.go` - Entry point, root command setup
 - `internal/cli/run.go` - Session creation and orchestrator startup
 - `internal/cli/resume.go` - Session restoration logic
 - `internal/cli/watch.go` - TUI attachment
@@ -160,7 +160,7 @@ Collab is a production-ready Go CLI tool that orchestrates collaboration between
 
 **Workspace Structure**:
 ```
-~/.local/share/collab-cli/sessions/<session-id>/
+~/.local/share/shiki-cli/sessions/<session-id>/
 ├── session_state.json       # Persistent state
 ├── orchestrator.log          # Structured event log (JSON)
 ├── shared_context.md         # Shared workspace context
@@ -242,7 +242,7 @@ Collab is a production-ready Go CLI tool that orchestrates collaboration between
 
 **Priority**: CLI flags > env vars > config file > defaults
 
-**Configuration File**: `~/.config/collab-cli/config.json`
+**Configuration File**: `~/.config/shiki-cli/config.json`
 
 **Fields**:
 - `workspace_dir` - Session workspace directory
@@ -310,7 +310,7 @@ Design a scalable API for...
 ### Session Creation Flow
 
 ```
-User: collab run task.md --watch
+User: shiki run task.md --watch
   │
   ├─> CLI parses command, loads task.md
   │
@@ -431,7 +431,7 @@ Signal received
 
 **Resume**:
 ```
-User: collab resume <session-id>
+User: shiki resume <session-id>
   │
   ├─> CLI loads session_state.json
   │

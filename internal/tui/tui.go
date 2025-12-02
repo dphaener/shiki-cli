@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/internal/logging"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/internal/logging"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // Run starts the TUI with the given session and event bus

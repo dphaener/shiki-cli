@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/darinhaener/collab/internal/tui/theme"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/tui/theme"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // Styles for turn list using Sekkei Design System theme

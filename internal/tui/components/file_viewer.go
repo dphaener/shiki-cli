@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/darinhaener/collab/internal/tui/theme"
+	"github.com/dphaener/shiki-cli/internal/tui/theme"
 )
 
 // Styles for file viewer using Sekkei Design System theme

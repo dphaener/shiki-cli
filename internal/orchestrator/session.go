@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darinhaener/collab/internal/storage"
-	"github.com/darinhaener/collab/internal/template"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/storage"
+	"github.com/dphaener/shiki-cli/internal/template"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // NewSession creates a new collaboration session from a template

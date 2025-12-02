@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -130,7 +130,7 @@ func TestCLIIntegration(t *testing.T) {
 			root.Execute()
 		})
 
-		assert.Contains(t, output, "collab version 1.0.0")
+		assert.Contains(t, output, "shiki version 1.0.0")
 		assert.Contains(t, output, "abc123")
 	})
 

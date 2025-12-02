@@ -15,7 +15,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // EventBus manages event distribution to subscribers using channels.

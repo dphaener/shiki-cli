@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // TestChatViewErrorRendering tests that error messages are properly rendered with text wrapping

@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/darinhaener/collab/internal/broker"
-	"github.com/darinhaener/collab/internal/conversation"
+	"github.com/dphaener/shiki-cli/internal/broker"
+	"github.com/dphaener/shiki-cli/internal/conversation"
 )
 
 // Task progress event types

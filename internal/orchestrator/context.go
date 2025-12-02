@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/darinhaener/collab/internal/storage"
+	"github.com/dphaener/shiki-cli/internal/storage"
 )
 
 // ReadTask reads the task.md file from the workspace

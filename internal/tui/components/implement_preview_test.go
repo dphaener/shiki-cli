@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darinhaener/collab/internal/tasks"
+	"github.com/dphaener/shiki-cli/internal/tasks"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 func TestAssistantEventLogger(t *testing.T) {

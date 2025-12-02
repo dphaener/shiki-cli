@@ -8,10 +8,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
-	"github.com/darinhaener/collab/internal/broker"
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/internal/tui/components"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/broker"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/internal/tui/components"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // ViewMode represents the current view state of the TUI

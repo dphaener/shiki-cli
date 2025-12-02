@@ -11,7 +11,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/darinhaener/collab/internal/config"
+	"github.com/dphaener/shiki-cli/internal/config"
 	"gopkg.in/yaml.v3"
 )
 

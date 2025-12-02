@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/darinhaener/collab/internal/config"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/config"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // WorkflowSetupResult contains the result of workflow setup

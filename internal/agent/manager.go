@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // Note: claude import kept for SDK message types in StartTurn

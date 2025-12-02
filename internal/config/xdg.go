@@ -7,46 +7,46 @@ import (
 	"runtime"
 )
 
-// GetConfigDir returns XDG_CONFIG_HOME/collab-cli or equivalent
+// GetConfigDir returns XDG_CONFIG_HOME/shiki-cli or equivalent
 func GetConfigDir() string {
 	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
-		return filepath.Join(dir, "collab-cli")
+		return filepath.Join(dir, "shiki-cli")
 	}
 
 	home, _ := os.UserHomeDir()
 	if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
-		return filepath.Join(home, ".config", "collab-cli")
+		return filepath.Join(home, ".config", "shiki-cli")
 	}
 	// Windows fallback
-	return filepath.Join(home, "AppData", "Local", "collab-cli")
+	return filepath.Join(home, "AppData", "Local", "shiki-cli")
 }
 
-// GetDataDir returns XDG_DATA_HOME/collab-cli or equivalent
+// GetDataDir returns XDG_DATA_HOME/shiki-cli or equivalent
 func GetDataDir() string {
 	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
-		return filepath.Join(dir, "collab-cli")
+		return filepath.Join(dir, "shiki-cli")
 	}
 
 	home, _ := os.UserHomeDir()
 	if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
-		return filepath.Join(home, ".local", "share", "collab-cli")
+		return filepath.Join(home, ".local", "share", "shiki-cli")
 	}
 	// Windows fallback
-	return filepath.Join(home, "AppData", "Local", "collab-cli", "data")
+	return filepath.Join(home, "AppData", "Local", "shiki-cli", "data")
 }
 
-// GetStateDir returns XDG_STATE_HOME/collab-cli or equivalent
+// GetStateDir returns XDG_STATE_HOME/shiki-cli or equivalent
 func GetStateDir() string {
 	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
-		return filepath.Join(dir, "collab-cli")
+		return filepath.Join(dir, "shiki-cli")
 	}
 
 	home, _ := os.UserHomeDir()
 	if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
-		return filepath.Join(home, ".local", "state", "collab-cli")
+		return filepath.Join(home, ".local", "state", "shiki-cli")
 	}
 	// Windows fallback - use same as data dir
-	return filepath.Join(home, "AppData", "Local", "collab-cli", "state")
+	return filepath.Join(home, "AppData", "Local", "shiki-cli", "state")
 }
 
 // EnsureLogDirectories creates the necessary directories for logging with proper permissions
@@ -71,7 +71,7 @@ func GetDebugLogPath() (string, error) {
 	// Try to create the directory first
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
 		// If XDG directory creation fails, fall back to current directory
-		return filepath.Join(".", "collab-debug.log"), nil
+		return filepath.Join(".", "shiki-debug.log"), nil
 	}
 
 	return filepath.Join(stateDir, "debug.log"), nil
@@ -90,9 +90,9 @@ func GetAssistantLogPath() (string, error) {
 	return filepath.Join(dataDir, "assistant.log"), nil
 }
 
-// MigrateDebugLog moves the existing collab-debug.log to the XDG state directory
+// MigrateDebugLog moves the existing shiki-debug.log to the XDG state directory
 func MigrateDebugLog() error {
-	oldPath := filepath.Join(".", "collab-debug.log")
+	oldPath := filepath.Join(".", "shiki-debug.log")
 
 	// Check if old log file exists
 	if _, err := os.Stat(oldPath); os.IsNotExist(err) {

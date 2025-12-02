@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/darinhaener/collab/internal/tui/components"
+	"github.com/dphaener/shiki-cli/internal/tui/components"
 )
 
 // View renders the complete TUI (Bubbletea View function)

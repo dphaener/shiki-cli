@@ -1,7 +1,7 @@
 package chatservice
 
 import (
-	"github.com/darinhaener/collab/internal/broker"
+	"github.com/dphaener/shiki-cli/internal/broker"
 )
 
 // Services holds all chat-related services.

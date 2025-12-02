@@ -1,6 +1,6 @@
 package events
 
-import "github.com/darinhaener/collab/pkg/types"
+import "github.com/dphaener/shiki-cli/pkg/types"
 
 // Subscriber represents an event consumer with filtering
 type Subscriber struct {

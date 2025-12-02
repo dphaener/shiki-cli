@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/darinhaener/collab/internal/tui/theme"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/tui/theme"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // maxInputHeight is the fixed height of the input container (textarea grows upward within it)

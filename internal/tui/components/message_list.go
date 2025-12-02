@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/darinhaener/collab/internal/conversation"
-	"github.com/darinhaener/collab/internal/tui/theme"
+	"github.com/dphaener/shiki-cli/internal/conversation"
+	"github.com/dphaener/shiki-cli/internal/tui/theme"
 )
 
 // MessageListState holds all information needed to render a message list pane.

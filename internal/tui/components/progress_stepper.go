@@ -2,8 +2,8 @@ package components
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	"github.com/darinhaener/collab/internal/tui/theme"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/tui/theme"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // DisplayPhase represents a phase in the progress stepper with flexible naming and status

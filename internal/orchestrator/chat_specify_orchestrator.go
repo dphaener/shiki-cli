@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
-	agentpkg "github.com/darinhaener/collab/internal/agent"
-	"github.com/darinhaener/collab/internal/broker"
-	"github.com/darinhaener/collab/internal/chatservice"
-	"github.com/darinhaener/collab/internal/conversation"
-	"github.com/darinhaener/collab/pkg/types"
+	agentpkg "github.com/dphaener/shiki-cli/internal/agent"
+	"github.com/dphaener/shiki-cli/internal/broker"
+	"github.com/dphaener/shiki-cli/internal/chatservice"
+	"github.com/dphaener/shiki-cli/internal/conversation"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // ChatSpecifyOrchestrator manages the specification workflow using the new chat infrastructure.

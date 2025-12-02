@@ -2,8 +2,8 @@
 
 set -e
 
-# Collab Installation Script
-# Installs the collab binary and sets up configuration directories
+# Shiki Installation Script
+# Installs the shiki binary and sets up configuration directories
 
 # Colors for output
 RED='\033[0;31m'
@@ -13,13 +13,13 @@ NC='\033[0m' # No Color
 
 # Installation directories
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/collab-cli"
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/collab-cli"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/shiki-cli"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/shiki-cli"
 
 # Binary name
-BINARY_NAME="collab"
+BINARY_NAME="shiki"
 
-echo "Collab Installation"
+echo "Shiki Installation"
 echo "==================="
 echo ""
 

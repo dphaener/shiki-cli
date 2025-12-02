@@ -1,8 +1,4 @@
-# Sekkei-specific
-.sekkei/memory/
-sekkei-specs/*/research/
-sekkei-specs/*/tasks/doing/
-sekkei-specs/*/tasks/for_review/
+# Git worktrees
 .worktrees/
 
 # Ruby
@@ -121,7 +117,7 @@ coverage/
 .pry_history
 
 # Go
-/collab
+/shiki
 *.exe
 /vendor/
 *.test
@@ -129,6 +125,6 @@ coverage/
 coverage.out
 
 # Sessions data (if testing locally)
-.local/share/collab-cli/sessions/*
+.local/share/shiki-cli/sessions/*
 
 KNOWN_BUGS.md

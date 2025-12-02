@@ -3,9 +3,9 @@ package orchestrator
 import (
 	"time"
 
-	agentpkg "github.com/darinhaener/collab/internal/agent"
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/pkg/types"
+	agentpkg "github.com/dphaener/shiki-cli/internal/agent"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // ImplementOrchestrator manages the implementation workflow with a single agent.

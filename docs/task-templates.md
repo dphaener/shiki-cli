@@ -153,10 +153,10 @@ Describe what the agents should submit...
 
 ## Template Validation
 
-Use `collab validate` to check template correctness:
+Use `shiki validate` to check template correctness:
 
 ```bash
-collab validate task.md
+shiki validate task.md
 ```
 
 **Validation Checks**:
@@ -590,7 +590,7 @@ templates/
 
 Before running real collaboration:
 
-1. **Validate syntax**: `collab validate task.md`
+1. **Validate syntax**: `shiki validate task.md`
 2. **Review workspace**: Check scaffolded files make sense
 3. **Read prompts aloud**: Do they sound natural?
 4. **Simulate turns**: Walk through expected flow
@@ -687,7 +687,7 @@ workspace_structure:
 
 ## Creating Templates
 
-### Method 1: Use `collab init`
+### Method 1: Use `shiki init`
 
 Interactive wizard creates template from questions:
 
@@ -713,7 +713,7 @@ collab init
 ```bash
 cp examples/code-review.md my-task.md
 $EDITOR my-task.md
-collab validate my-task.md
+shiki validate my-task.md
 ```
 
 ### Method 3: Write from Scratch
@@ -735,7 +735,7 @@ max_turns: 10
 Task description...
 EOF
 
-collab validate my-task.md
+shiki validate my-task.md
 ```
 
 ## Template Library
@@ -813,12 +813,12 @@ workspace_structure:
 ### File Locations
 
 - **Templates**: `examples/` or user-defined location
-- **Validation**: `collab validate <path>`
-- **Execution**: `collab run <path>`
+- **Validation**: `shiki validate <path>`
+- **Execution**: `shiki run <path>`
 
 ### Related Commands
 
-- `collab init` - Create new template interactively
-- `collab validate <template>` - Validate template
-- `collab run <template>` - Execute collaboration
-- `collab show <session-id> --template` - View session template
+- `shiki init` - Create new template interactively
+- `shiki validate <template>` - Validate template
+- `shiki run <template>` - Execute collaboration
+- `shiki show <session-id> --template` - View session template

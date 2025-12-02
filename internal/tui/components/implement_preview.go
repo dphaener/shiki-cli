@@ -11,8 +11,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/darinhaener/collab/internal/tasks"
-	"github.com/darinhaener/collab/internal/tui/theme"
+	"github.com/dphaener/shiki-cli/internal/tasks"
+	"github.com/dphaener/shiki-cli/internal/tui/theme"
 )
 
 // TaskStatus represents the status of an implementation task

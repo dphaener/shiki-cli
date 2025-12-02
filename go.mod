@@ -1,4 +1,4 @@
-module github.com/darinhaener/collab
+module github.com/dphaener/shiki-cli
 
 go 1.24.0
 

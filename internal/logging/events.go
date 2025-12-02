@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/darinhaener/collab/internal/events"
+	"github.com/dphaener/shiki-cli/internal/events"
 )
 
 // EventLogger subscribes to EventBus and writes all events to orchestrator.log

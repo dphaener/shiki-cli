@@ -1,7 +1,7 @@
 .PHONY: build test lint install clean help
 
 # Variables
-BINARY_NAME=collab
+BINARY_NAME=shiki
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -10,7 +10,7 @@ LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X m
 # Build binary
 build:
 	@echo "Building $(BINARY_NAME)..."
-	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/collab
+	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/shiki
 	@echo "Build complete: ./$(BINARY_NAME)"
 
 # Run tests
@@ -27,7 +27,7 @@ lint:
 # Install binary to $GOPATH/bin
 install:
 	@echo "Installing $(BINARY_NAME)..."
-	go install $(LDFLAGS) ./cmd/collab
+	go install $(LDFLAGS) ./cmd/shiki
 
 # Clean build artifacts
 clean:

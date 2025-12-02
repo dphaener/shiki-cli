@@ -7,11 +7,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/internal/orchestrator"
-	"github.com/darinhaener/collab/internal/tui/components"
-	"github.com/darinhaener/collab/internal/tui/theme"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/internal/orchestrator"
+	"github.com/dphaener/shiki-cli/internal/tui/components"
+	"github.com/dphaener/shiki-cli/internal/tui/theme"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // PhaseType identifies the type of phase for configuration

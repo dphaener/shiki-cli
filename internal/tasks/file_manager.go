@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darinhaener/collab/internal/storage"
+	"github.com/dphaener/shiki-cli/internal/storage"
 )
 
 // ProgressFileManager handles reading and writing task-progress.md files

@@ -23,7 +23,7 @@ func TestVersionCommand(t *testing.T) {
 			commit:    "abc123def456",
 			buildDate: "2025-01-01T00:00:00Z",
 			wantContains: []string{
-				"collab version 1.0.0",
+				"shiki version 1.0.0",
 				"commit:     abc123def456",
 				"built:      2025-01-01T00:00:00Z",
 			},
@@ -35,7 +35,7 @@ func TestVersionCommand(t *testing.T) {
 			commit:    "unknown",
 			buildDate: "unknown",
 			wantContains: []string{
-				"collab version dev",
+				"shiki version dev",
 				"commit:     unknown",
 				"built:      unknown",
 			},
@@ -47,7 +47,7 @@ func TestVersionCommand(t *testing.T) {
 			commit:    "abc123",
 			buildDate: "2025-11-23",
 			wantContains: []string{
-				"collab version 0.1.0",
+				"shiki version 0.1.0",
 				"commit:     abc123",
 				"built:      2025-11-23",
 			},

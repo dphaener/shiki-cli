@@ -4,7 +4,7 @@ package chatservice
 import (
 	"context"
 
-	"github.com/darinhaener/collab/internal/conversation"
+	"github.com/dphaener/shiki-cli/internal/conversation"
 )
 
 // CreateSessionOpts contains options for creating a session.

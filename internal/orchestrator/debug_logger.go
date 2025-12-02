@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/darinhaener/collab/internal/config"
+	"github.com/dphaener/shiki-cli/internal/config"
 )
 
 // debugLogger handles debug logging to a file

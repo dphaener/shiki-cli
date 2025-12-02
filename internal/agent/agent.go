@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // Agent represents an AI agent subprocess

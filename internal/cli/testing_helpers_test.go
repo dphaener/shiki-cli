@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darinhaener/collab/internal/orchestrator"
-	"github.com/darinhaener/collab/internal/template"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/orchestrator"
+	"github.com/dphaener/shiki-cli/internal/template"
+	"github.com/dphaener/shiki-cli/pkg/types"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )

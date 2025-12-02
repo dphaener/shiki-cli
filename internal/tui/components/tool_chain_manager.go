@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/darinhaener/collab/internal/broker"
+	"github.com/dphaener/shiki-cli/internal/broker"
 )
 
 // ExecutionState represents the current state of a tool execution.

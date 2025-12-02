@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/darinhaener/collab/internal/config"
+	"github.com/dphaener/shiki-cli/internal/config"
 )
 
 var (

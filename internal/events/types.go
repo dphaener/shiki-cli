@@ -3,7 +3,7 @@ package events
 import (
 	"time"
 
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // Event wraps typed events with common metadata.

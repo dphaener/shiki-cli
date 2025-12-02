@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/connerohnesorge/claude-agent-sdk-go/pkg/claude"
-	agentpkg "github.com/darinhaener/collab/internal/agent"
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/pkg/types"
+	agentpkg "github.com/dphaener/shiki-cli/internal/agent"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // BaseOrchestrator provides the common implementation for all phase orchestrators.

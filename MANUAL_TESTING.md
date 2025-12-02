@@ -1,4 +1,4 @@
-# Manual Testing Plan - Collab Multi-Agent CLI
+# Manual Testing Plan - Shiki CLI
 
 **Version**: 6c1455e
 **Build Date**: 2025-11-24
@@ -8,14 +8,14 @@
 
 Before starting manual testing, ensure:
 
-1. **Executable Built**: `./collab` exists in project root (completed)
+1. **Executable Built**: `./shiki` exists in project root (completed)
 2. **API Key Available**: Set `ANTHROPIC_API_KEY` environment variable
    ```bash
    export ANTHROPIC_API_KEY="your-api-key-here"
    ```
 3. **Clean Workspace**: Remove any previous test sessions
    ```bash
-   rm -rf ~/.local/share/collab-cli/sessions/*
+   rm -rf ~/.local/share/shiki-cli/sessions/*
    ```
 
 ## Testing Strategy
@@ -44,7 +44,7 @@ export ANTHROPIC_API_KEY="your-api-key"
 **Steps**:
 1. Start collaboration with TUI:
    ```bash
-   ./collab run examples/simple-agreement.md --watch
+   ./shiki run examples/simple-agreement.md --watch
    ```
 
 2. Observe TUI behavior:
@@ -75,7 +75,7 @@ export ANTHROPIC_API_KEY="your-api-key"
 
 **Expected Session Artifacts**:
 ```bash
-ls -la ~/.local/share/collab-cli/sessions/[session-id]/
+ls -la ~/.local/share/shiki-cli/sessions/[session-id]/
 ```
 Should contain:
 - `task_template.md` - Original task
@@ -103,7 +103,7 @@ Should contain:
 **Steps**:
 1. Run collaboration without --watch:
    ```bash
-   ./collab run examples/simple-agreement.md
+   ./shiki run examples/simple-agreement.md
    ```
 
 2. Observe headless output:
@@ -119,7 +119,7 @@ Should contain:
 
 4. Check session directory:
    ```bash
-   ls -la ~/.local/share/collab-cli/sessions/[session-id]/
+   ls -la ~/.local/share/shiki-cli/sessions/[session-id]/
    ```
    - [ ] All expected files present
    - [ ] deliverable.md contains final agreement
@@ -140,7 +140,7 @@ Should contain:
 **Steps**:
 1. Start collaboration with TUI:
    ```bash
-   ./collab run examples/code-review.md --watch
+   ./shiki run examples/code-review.md --watch
    ```
 
 2. Pause mid-execution:
@@ -151,7 +151,7 @@ Should contain:
 
 3. Verify paused state:
    ```bash
-   ./collab list sessions
+   ./shiki list sessions
    ```
    - [ ] Session status shows "paused"
    - [ ] Turn count matches when paused
@@ -159,7 +159,7 @@ Should contain:
 
 4. Inspect session state:
    ```bash
-   ./collab show [session-id]
+   ./shiki show [session-id]
    ```
    - [ ] Shows summary with status "paused"
    - [ ] Turn count, duration, and cost displayed
@@ -167,7 +167,7 @@ Should contain:
 
 5. Resume session:
    ```bash
-   ./collab resume [session-id] --watch
+   ./shiki resume [session-id] --watch
    ```
    - [ ] TUI shows full turn history from before pause
    - [ ] Collaboration continues from next turn
@@ -198,14 +198,14 @@ Should contain:
 **Steps**:
 1. List all sessions:
    ```bash
-   ./collab list sessions
+   ./shiki list sessions
    ```
    - [ ] Table shows session ID, status, turns, duration, start time
    - [ ] Completed sessions marked with status "completed"
 
 2. Show session summary:
    ```bash
-   ./collab show [session-id]
+   ./shiki show [session-id]
    ```
    - [ ] Displays status, duration, turn count
    - [ ] Shows token usage (total and per-agent)
@@ -214,7 +214,7 @@ Should contain:
 
 3. View messages:
    ```bash
-   ./collab show [session-id] --messages
+   ./shiki show [session-id] --messages
    ```
    - [ ] All agent messages displayed chronologically
    - [ ] Each message shows: timestamp, agent, turn number
@@ -222,28 +222,28 @@ Should contain:
 
 4. View shared context:
    ```bash
-   ./collab show [session-id] --context
+   ./shiki show [session-id] --context
    ```
    - [ ] Shared knowledge accumulated during collaboration
    - [ ] Shows collaborative decisions and agreements
 
 5. View agent memory:
    ```bash
-   ./collab show [session-id] --memory agent_1
+   ./shiki show [session-id] --memory agent_1
    ```
    - [ ] Agent-specific private state displayed
    - [ ] Repeat for agent_2
 
 6. View deliverable:
    ```bash
-   ./collab show [session-id] --deliverable
+   ./shiki show [session-id] --deliverable
    ```
    - [ ] Final deliverable content displayed
    - [ ] Shows approval metadata
 
 7. View logs:
    ```bash
-   cat ~/.local/share/collab-cli/sessions/[session-id]/orchestrator.log
+   cat ~/.local/share/shiki-cli/sessions/[session-id]/orchestrator.log
    ```
    - [ ] JSON-formatted log entries
    - [ ] Events include: TurnStarted, TurnCompleted, MessageSent, etc.
@@ -267,16 +267,16 @@ Should contain:
 1. Create multiple sessions:
    ```bash
    # Run one to completion
-   ./collab run examples/simple-agreement.md
+   ./shiki run examples/simple-agreement.md
 
    # Start one and pause it
-   ./collab run examples/code-review.md --watch
+   ./shiki run examples/code-review.md --watch
    # (Pause with Ctrl+C after 2 turns)
    ```
 
 2. List all sessions:
    ```bash
-   ./collab list sessions
+   ./shiki list sessions
    ```
    - [ ] Table displays all sessions
    - [ ] Columns: ID, Status, Turns, Duration, Started
@@ -284,23 +284,23 @@ Should contain:
 
 3. Filter by status:
    ```bash
-   ./collab list sessions --status completed
+   ./shiki list sessions --status completed
    ```
    - [ ] Only completed sessions shown
 
    ```bash
-   ./collab list sessions --status paused
+   ./shiki list sessions --status paused
    ```
    - [ ] Only paused sessions shown
 
 4. Clean old sessions:
    ```bash
-   ./collab clean --older-than 1m
+   ./shiki clean --older-than 1m
    ```
    - [ ] Confirmation prompt appears
    - [ ] Lists sessions to be deleted
    - [ ] After confirmation, sessions removed
-   - [ ] Verify with `./collab list sessions`
+   - [ ] Verify with `./shiki list sessions`
 
 **Success Criteria**:
 - List command shows accurate session metadata
@@ -319,7 +319,7 @@ Should contain:
 **Steps**:
 1. Validate correct template:
    ```bash
-   ./collab validate examples/simple-agreement.md
+   ./shiki validate examples/simple-agreement.md
    ```
    - [ ] Validation passes with checkmarks
    - [ ] All criteria validated: YAML frontmatter, required fields, syntax
@@ -335,7 +335,7 @@ Should contain:
    ```
 
    ```bash
-   ./collab validate test-invalid.md
+   ./shiki validate test-invalid.md
    ```
    - [ ] Validation fails with specific errors
    - [ ] Each missing field reported
@@ -351,7 +351,7 @@ Should contain:
    ```
 
    ```bash
-   ./collab validate test-bad-yaml.md
+   ./shiki validate test-bad-yaml.md
    ```
    - [ ] Validation fails with YAML syntax error
    - [ ] Line number reported (if possible)
@@ -372,7 +372,7 @@ Should contain:
    ```
 
    ```bash
-   ./collab validate test-bad-types.md
+   ./shiki validate test-bad-types.md
    ```
    - [ ] Validation fails with type error for max_turns
 
@@ -391,7 +391,7 @@ Should contain:
 **Steps**:
 1. Initialize new template:
    ```bash
-   ./collab init template my-test-task
+   ./shiki init template my-test-task
    ```
    - [ ] Interactive wizard prompts for:
      - Agent 1 name
@@ -413,13 +413,13 @@ Should contain:
 
 3. Validate generated template:
    ```bash
-   ./collab validate my-test-task.md
+   ./shiki validate my-test-task.md
    ```
    - [ ] Validation passes
 
 4. Run generated template:
    ```bash
-   ./collab run my-test-task.md
+   ./shiki run my-test-task.md
    ```
    - [ ] Session starts successfully
    - [ ] Agents execute as configured
@@ -439,13 +439,13 @@ Should contain:
 **Steps**:
 1. Start headless session:
    ```bash
-   ./collab run examples/architecture-design.md &
+   ./shiki run examples/architecture-design.md &
    # Note the session ID from output
    ```
 
 2. Attach TUI to running session:
    ```bash
-   ./collab watch [session-id]
+   ./shiki watch [session-id]
    ```
    - [ ] TUI launches showing current session
    - [ ] All past turns visible in history
@@ -455,14 +455,14 @@ Should contain:
    - [ ] Press 'q' to exit TUI
    - [ ] Verify session continues running:
      ```bash
-     ./collab list sessions
+     ./shiki list sessions
      # Should show status "running"
      ```
 
 4. Replay completed session:
    ```bash
    # Wait for session to complete or use a completed session ID
-   ./collab watch [session-id] --replay
+   ./shiki watch [session-id] --replay
    ```
    - [ ] TUI shows full turn history
    - [ ] Can navigate through all turns
@@ -484,7 +484,7 @@ Should contain:
 **Steps**:
 ```bash
 unset ANTHROPIC_API_KEY
-./collab run examples/simple-agreement.md
+./shiki run examples/simple-agreement.md
 ```
 - [ ] Fails fast with clear error message
 - [ ] Error mentions ANTHROPIC_API_KEY requirement
@@ -496,7 +496,7 @@ unset ANTHROPIC_API_KEY
 ```bash
 mkdir -p /tmp/readonly-workspace
 chmod 000 /tmp/readonly-workspace
-./collab run examples/simple-agreement.md --workspace /tmp/readonly-workspace
+./shiki run examples/simple-agreement.md --workspace /tmp/readonly-workspace
 ```
 - [ ] Fails with permission error
 - [ ] Clear message about workspace not writable
@@ -520,7 +520,7 @@ Agree on a color.
 ```
 
 ```bash
-./collab run test-max-turns.md
+./shiki run test-max-turns.md
 ```
 - [ ] Session stops at max_turns
 - [ ] Status marked as "incomplete"
@@ -535,7 +535,7 @@ Agree on a color.
 **Steps**:
 1. Run a session:
    ```bash
-   ./collab run examples/code-review.md --watch
+   ./shiki run examples/code-review.md --watch
    ```
 
 2. Monitor during execution:
@@ -545,7 +545,7 @@ Agree on a color.
 
 3. After completion:
    ```bash
-   ./collab show [session-id]
+   ./shiki show [session-id]
    ```
    - [ ] Total tokens matches sum of all turns
    - [ ] Cost calculation accurate (within 1%)
@@ -565,13 +565,13 @@ Agree on a color.
 **Steps**:
 1. Start session with TUI:
    ```bash
-   ./collab run examples/architecture-design.md --watch
+   ./shiki run examples/architecture-design.md --watch
    ```
 
 2. In another terminal, modify shared context:
    ```bash
    echo "## External Note\nManually added content" >> \
-     ~/.local/share/collab-cli/sessions/[session-id]/shared_context.md
+     ~/.local/share/shiki-cli/sessions/[session-id]/shared_context.md
    ```
 
 3. Observe TUI:
@@ -593,12 +593,12 @@ Agree on a color.
 **Steps**:
 1. Run code-review template (has workspace_structure):
    ```bash
-   ./collab run examples/code-review.md
+   ./shiki run examples/code-review.md
    ```
 
 2. Check session directory:
    ```bash
-   ls -la ~/.local/share/collab-cli/sessions/[session-id]/
+   ls -la ~/.local/share/shiki-cli/sessions/[session-id]/
    ```
    - [ ] `src/` directory created
    - [ ] `tests/` directory created
@@ -620,18 +620,18 @@ Agree on a color.
 **Steps**:
 1. Create template:
    ```bash
-   ./collab init template e2e-test
+   ./shiki init template e2e-test
    # Fill in wizard prompts
    ```
 
 2. Validate template:
    ```bash
-   ./collab validate e2e-test.md
+   ./shiki validate e2e-test.md
    ```
 
 3. Run with TUI:
    ```bash
-   ./collab run e2e-test.md --watch
+   ./shiki run e2e-test.md --watch
    ```
 
 4. Pause mid-execution:
@@ -639,22 +639,22 @@ Agree on a color.
 
 5. List sessions:
    ```bash
-   ./collab list sessions
+   ./shiki list sessions
    ```
 
 6. Resume:
    ```bash
-   ./collab resume [session-id] --watch
+   ./shiki resume [session-id] --watch
    ```
 
 7. Complete and inspect:
    ```bash
-   ./collab show [session-id] --deliverable
+   ./shiki show [session-id] --deliverable
    ```
 
 8. Clean up:
    ```bash
-   ./collab clean --older-than 1m
+   ./shiki clean --older-than 1m
    ```
 
 **Success Criteria**:
@@ -672,7 +672,7 @@ Agree on a color.
 
 1. **Startup Time** (SC-001: < 10 seconds):
    ```bash
-   time ./collab run examples/simple-agreement.md --watch
+   time ./shiki run examples/simple-agreement.md --watch
    # Measure time until TUI renders
    ```
    - [ ] TUI appears in < 10 seconds
@@ -704,21 +704,21 @@ Agree on a color.
 **Steps**:
 1. Simple agreement:
    ```bash
-   ./collab run examples/simple-agreement.md
+   ./shiki run examples/simple-agreement.md
    ```
    - [ ] Completes successfully
    - [ ] Deliverable contains color choice
 
 2. Code review:
    ```bash
-   ./collab run examples/code-review.md
+   ./shiki run examples/code-review.md
    ```
    - [ ] Completes successfully
    - [ ] Deliverable contains code with tests
 
 3. Architecture design:
    ```bash
-   ./collab run examples/architecture-design.md
+   ./shiki run examples/architecture-design.md
    ```
    - [ ] Completes successfully
    - [ ] Deliverable contains architecture document
@@ -808,13 +808,13 @@ make clean && make build
 export ANTHROPIC_API_KEY="your-key"
 
 # 3. Clean workspace
-rm -rf ~/.local/share/collab-cli/sessions/*
+rm -rf ~/.local/share/shiki-cli/sessions/*
 
 # 4. Run simple test with TUI
-./collab run examples/simple-agreement.md --watch
+./shiki run examples/simple-agreement.md --watch
 
 # 5. Verify completion
-./collab list sessions
+./shiki list sessions
 ```
 
 Good luck with testing!

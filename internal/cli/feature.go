@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darinhaener/collab/internal/storage"
-	"github.com/darinhaener/collab/internal/tui"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/storage"
+	"github.com/dphaener/shiki-cli/internal/tui"
+	"github.com/dphaener/shiki-cli/pkg/types"
 	"github.com/spf13/cobra"
 )
 

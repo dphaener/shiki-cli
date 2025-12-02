@@ -4,11 +4,11 @@ import (
 	"context"
 	"path/filepath"
 
-	"github.com/darinhaener/collab/internal/config"
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/internal/logging"
-	"github.com/darinhaener/collab/internal/storage"
-	"github.com/darinhaener/collab/internal/tui"
+	"github.com/dphaener/shiki-cli/internal/config"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/internal/logging"
+	"github.com/dphaener/shiki-cli/internal/storage"
+	"github.com/dphaener/shiki-cli/internal/tui"
 	"github.com/spf13/cobra"
 )
 

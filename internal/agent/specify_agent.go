@@ -3,8 +3,8 @@ package agent
 import (
 	"fmt"
 
-	"github.com/darinhaener/collab/internal/prompts"
-	"github.com/darinhaener/collab/pkg/types"
+	"github.com/dphaener/shiki-cli/internal/prompts"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // NewSpecifyAgent creates an agent configured for feature specification

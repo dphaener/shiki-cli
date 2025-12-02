@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/darinhaener/collab/internal/storage"
+	"github.com/dphaener/shiki-cli/internal/storage"
 	"gopkg.in/yaml.v3"
 )
 

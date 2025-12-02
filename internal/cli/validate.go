@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/darinhaener/collab/internal/template"
+	"github.com/dphaener/shiki-cli/internal/template"
 	"github.com/spf13/cobra"
 )
 

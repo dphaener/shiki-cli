@@ -3,9 +3,9 @@ package orchestrator
 import (
 	"time"
 
-	agentpkg "github.com/darinhaener/collab/internal/agent"
-	"github.com/darinhaener/collab/internal/events"
-	"github.com/darinhaener/collab/pkg/types"
+	agentpkg "github.com/dphaener/shiki-cli/internal/agent"
+	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // TasksOrchestrator manages the tasks generation workflow with a single agent.

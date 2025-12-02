@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darinhaener/collab/internal/broker"
+	"github.com/dphaener/shiki-cli/internal/broker"
 )
 
 func TestComplianceMonitor_Basic(t *testing.T) {

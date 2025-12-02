@@ -3,7 +3,7 @@ package template
 import (
 	"testing"
 
-	"github.com/darinhaener/collab/internal/storage"
+	"github.com/dphaener/shiki-cli/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

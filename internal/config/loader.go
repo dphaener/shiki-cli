@@ -30,24 +30,24 @@ func Load(configPath string, cliOverrides map[string]interface{}) (*Config, erro
 }
 
 func applyEnvOverrides(cfg *Config) {
-	if val := os.Getenv("COLLAB_CLI_WORKSPACE"); val != "" {
+	if val := os.Getenv("SHIKI_CLI_WORKSPACE"); val != "" {
 		cfg.WorkspaceDir = val
 	}
-	if val := os.Getenv("COLLAB_CLI_NO_COLOR"); val == "true" || val == "1" {
+	if val := os.Getenv("SHIKI_CLI_NO_COLOR"); val == "true" || val == "1" {
 		cfg.UIColor = false
 	}
-	if val := os.Getenv("COLLAB_CLI_MODEL"); val != "" {
+	if val := os.Getenv("SHIKI_CLI_MODEL"); val != "" {
 		cfg.DefaultModel = val
 	}
-	if val := os.Getenv("COLLAB_CLI_TIMEOUT"); val != "" {
+	if val := os.Getenv("SHIKI_CLI_TIMEOUT"); val != "" {
 		if timeout, err := strconv.Atoi(val); err == nil {
 			cfg.TurnTimeoutSec = timeout
 		}
 	}
-	if val := os.Getenv("COLLAB_CLI_LOG_LEVEL"); val != "" {
+	if val := os.Getenv("SHIKI_CLI_LOG_LEVEL"); val != "" {
 		cfg.LogLevel = val
 	}
-	if val := os.Getenv("COLLAB_CLI_LOG_FORMAT"); val != "" {
+	if val := os.Getenv("SHIKI_CLI_LOG_FORMAT"); val != "" {
 		cfg.LogFormat = val
 	}
 }

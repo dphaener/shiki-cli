@@ -74,7 +74,7 @@ Collab exposes **7 collaboration tools** to agents via the Model Context Protoco
 
 // Output
 {
-  "message_path": "/Users/user/.local/share/collab-cli/sessions/abc123/messages/003-architect.md",
+  "message_path": "/Users/user/.local/share/shiki-cli/sessions/abc123/messages/003-architect.md",
   "message_id": "003"
 }
 ```
@@ -158,7 +158,7 @@ print(f"Message sent: {response['message_id']}")
       "timestamp": "2025-11-23T10:15:00Z",
       "turn": 2,
       "content": "I have concerns about the database design...",
-      "file_path": "/Users/user/.local/share/collab-cli/sessions/abc123/messages/001-reviewer.md"
+      "file_path": "/Users/user/.local/share/shiki-cli/sessions/abc123/messages/001-reviewer.md"
     },
     {
       "id": "002",
@@ -167,7 +167,7 @@ print(f"Message sent: {response['message_id']}")
       "timestamp": "2025-11-23T10:25:00Z",
       "turn": 4,
       "content": "Thanks for addressing my concerns. One more question...",
-      "file_path": "/Users/user/.local/share/collab-cli/sessions/abc123/messages/002-reviewer.md"
+      "file_path": "/Users/user/.local/share/shiki-cli/sessions/abc123/messages/002-reviewer.md"
     }
   ]
 }
@@ -251,7 +251,7 @@ for msg in response['messages']:
 // Output
 {
   "success": true,
-  "path": "/Users/user/.local/share/collab-cli/sessions/abc123/shared_context.md"
+  "path": "/Users/user/.local/share/shiki-cli/sessions/abc123/shared_context.md"
 }
 ```
 
@@ -321,7 +321,7 @@ mcp.invoke_tool("write_shared_context", {
 // Output
 {
   "content": "# Design Session\n\n## Decisions\n- Database: PostgreSQL\n...",
-  "path": "/Users/user/.local/share/collab-cli/sessions/abc123/shared_context.md"
+  "path": "/Users/user/.local/share/shiki-cli/sessions/abc123/shared_context.md"
 }
 ```
 
@@ -386,7 +386,7 @@ if "## Open Questions" in context:
 // Output
 {
   "success": true,
-  "path": "/Users/user/.local/share/collab-cli/sessions/abc123/memory/architect.md"
+  "path": "/Users/user/.local/share/shiki-cli/sessions/abc123/memory/architect.md"
 }
 ```
 
@@ -457,7 +457,7 @@ mcp.invoke_tool("update_memory", {
 // Output
 {
   "content": "# My Strategy\n\n- Be constructive...",
-  "path": "/Users/user/.local/share/collab-cli/sessions/abc123/memory/architect.md"
+  "path": "/Users/user/.local/share/shiki-cli/sessions/abc123/memory/architect.md"
 }
 ```
 
@@ -777,7 +777,7 @@ Specific tools emit additional events:
 Tools write to standardized workspace structure:
 
 ```
-~/.local/share/collab-cli/sessions/<session-id>/
+~/.local/share/shiki-cli/sessions/<session-id>/
 ├── session_state.json       # Not accessed by tools
 ├── orchestrator.log          # Event log (not accessed by tools)
 ├── shared_context.md         # read/write_shared_context

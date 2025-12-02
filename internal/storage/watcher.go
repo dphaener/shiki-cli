@@ -7,7 +7,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/darinhaener/collab/internal/events"
+	"github.com/dphaener/shiki-cli/internal/events"
 )
 
 // Watcher monitors filesystem changes and emits events
