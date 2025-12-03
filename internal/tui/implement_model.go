@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dphaener/shiki-cli/internal/events"
 	"github.com/dphaener/shiki-cli/internal/orchestrator"
-	"github.com/dphaener/shiki-cli/internal/tasks"
 	"github.com/dphaener/shiki-cli/internal/tui/components"
 	"github.com/dphaener/shiki-cli/pkg/types"
 )
@@ -146,8 +146,17 @@ func (m ImplementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle implement-specific messages first
 	switch msg := msg.(type) {
 	case ImplementAgentInitializedMsg:
-		// Replace the orchestrator in PhaseModel
-		m.PhaseModel.orchestrator = msg.Orchestrator
+		// Replace the orchestrator in PhaseModel - cast to interface
+		m.PhaseModel.orchestrator = orchestrator.PhaseOrchestrator(msg.Orchestrator)
+
+		// Start task progress tracking if available
+		if msg.Orchestrator.IsTaskProgressEnabled() {
+			msg.Orchestrator.StartTaskProgress()
+		}
+
+		// Refresh the preview to show the task progress file
+		m.refreshImplementPreview()
+
 		// Signal that agent is ready
 		return m, func() tea.Msg { return PhaseAgentReadyMsg{} }
 
@@ -163,6 +172,36 @@ func (m ImplementModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Task progress initialization failed - show error in preview
 		errorContent := fmt.Sprintf("Task progress initialization failed: %v", msg.Err)
 		m.implementPreview.SetSummary(errorContent)
+		return m, nil
+
+	case events.Event:
+		// Handle file update events for task-progress.md
+		if msg.Type == types.EventFileUpdated {
+			if payload, ok := msg.Payload.(events.FileUpdatedPayload); ok {
+				return m.handleFileUpdateEvent(payload)
+			}
+		}
+
+	case TaskProgressRefreshMsg:
+		// Task progress file was updated - show appropriate feedback
+		operation := msg.Operation
+		var statusMsg string
+		switch operation {
+		case "created":
+			statusMsg = "Task progress tracking started"
+		case "modified":
+			statusMsg = "Task progress updated"
+		case "deleted":
+			statusMsg = "Task progress file deleted"
+		default:
+			statusMsg = "Task progress refreshed"
+		}
+
+		// Update UI to show progress has been refreshed
+		m.refreshImplementPreview()
+
+		// Could emit a brief status message here if desired
+		_ = statusMsg
 		return m, nil
 	}
 
@@ -191,20 +230,75 @@ func (m ImplementModel) ViewContent() string {
 
 // refreshImplementPreview updates the implementation preview
 func (m *ImplementModel) refreshImplementPreview() {
-	// Load task progress from progress file if it exists
-	if m.session.FeatureDir != "" {
-		progressFilePath := filepath.Join(m.session.FeatureDir, "task-progress.md")
-
-		// Try to load progress from file
-		if err := m.implementPreview.LoadProgressFromFile(progressFilePath); err != nil {
-			// If loading fails, show error or fallback content
-			fallbackContent := fmt.Sprintf("Task progress tracking not available.\nReason: %v\n\nThe agent will create task-progress.md when implementation begins.", err)
-			m.implementPreview.SetSummary(fallbackContent)
-		}
-	} else {
-		// No feature directory available
+	// Check if feature directory is available
+	if m.session.FeatureDir == "" {
 		m.implementPreview.SetSummary("Implementation progress will appear here when the agent begins work.")
+		return
 	}
+
+	progressFilePath := filepath.Join(m.session.FeatureDir, "task-progress.md")
+
+	// Check if progress file exists
+	if _, err := os.Stat(progressFilePath); err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist yet - show loading message
+			loadingContent := "Loading tasks...\n\nInitializing task progress tracking.\nThe agent will create task-progress.md when implementation begins."
+			m.implementPreview.SetSummary(loadingContent)
+		} else {
+			// Other error accessing file
+			errorContent := fmt.Sprintf("Unable to access task progress file:\n%v\n\nPlease check file permissions and try again.", err)
+			m.implementPreview.SetSummary(errorContent)
+		}
+		return
+	}
+
+	// File exists, try to load progress with retry mechanism
+	maxRetries := 3
+	var loadErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		loadErr = m.implementPreview.LoadProgressFromFile(progressFilePath)
+		if loadErr == nil {
+			// Success - break out of retry loop
+			break
+		}
+
+		// Check if it's a temporary file access error
+		if os.IsNotExist(loadErr) {
+			// File was deleted between check and load - unlikely but possible
+			m.implementPreview.SetSummary("Task progress file was removed during loading. Refreshing...")
+			return
+		}
+
+		if strings.Contains(loadErr.Error(), "permission denied") ||
+		   strings.Contains(loadErr.Error(), "device or resource busy") {
+			// Temporary access issue - retry after a short delay
+			if attempt < maxRetries-1 {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+		}
+
+		// For validation/parsing errors, don't retry - these are permanent
+		break
+	}
+
+	if loadErr != nil {
+		// Loading failed - show detailed error message
+		var errorMsg string
+		if strings.Contains(loadErr.Error(), "validation failed") {
+			errorMsg = fmt.Sprintf("Task progress file format error:\n%v\n\nThe file may be corrupted or in an unexpected format.", loadErr)
+		} else if strings.Contains(loadErr.Error(), "parse") {
+			errorMsg = fmt.Sprintf("Failed to parse task progress:\n%v\n\nPlease check the file format in task-progress.md", loadErr)
+		} else if strings.Contains(loadErr.Error(), "permission denied") {
+			errorMsg = fmt.Sprintf("Permission error accessing task progress:\n%v\n\nPlease check file permissions for task-progress.md", loadErr)
+		} else {
+			errorMsg = fmt.Sprintf("Task progress loading error:\n%v\n\nRefreshing the view may resolve this issue.", loadErr)
+		}
+		m.implementPreview.SetSummary(errorMsg)
+	}
+
+	// If we reach here, loading was successful - the preview will show the progress data
 }
 
 // IsPhaseComplete returns whether implementation is complete
@@ -219,14 +313,14 @@ func (m *ImplementModel) SetTaskProgress(current, total, completed int) {
 	m.completedTasks = completed
 }
 
-// initializeTaskProgress creates initial task-progress.md file if it doesn't exist
+// initializeTaskProgress initializes task progress tracking
+// This now delegates to the orchestrator which handles file creation
 func (m *ImplementModel) initializeTaskProgress() error {
 	if m.session.FeatureDir == "" {
 		return fmt.Errorf("no feature directory available")
 	}
 
 	progressFilePath := filepath.Join(m.session.FeatureDir, "task-progress.md")
-	tasksFilePath := m.session.TasksFile
 
 	// Check if progress file already exists
 	if _, err := os.Stat(progressFilePath); err == nil {
@@ -234,14 +328,71 @@ func (m *ImplementModel) initializeTaskProgress() error {
 		return m.implementPreview.RefreshFromProgressFile()
 	}
 
-	// Create progress file manager and initialize progress file
-	progressManager := tasks.NewProgressFileManager(progressFilePath)
-	if err := progressManager.CreateInitialProgressFile(tasksFilePath); err != nil {
-		return fmt.Errorf("failed to create initial progress file: %w", err)
+	// The orchestrator will handle file creation during Initialize()
+	// Here we just need to prepare the preview to load it once it's created
+	return nil
+}
+
+// handleFileUpdateEvent handles file update events for task progress monitoring
+func (m *ImplementModel) handleFileUpdateEvent(payload events.FileUpdatedPayload) (tea.Model, tea.Cmd) {
+	// Check if the updated file is the task-progress.md file for this session
+	if m.session.FeatureDir == "" {
+		return m, nil
 	}
 
-	// Load the newly created progress file into the preview
-	return m.implementPreview.LoadProgressFromFile(progressFilePath)
+	expectedProgressFile := filepath.Join(m.session.FeatureDir, "task-progress.md")
+
+	// Normalize paths for comparison
+	updateFile := filepath.Clean(payload.Path)
+	expectedFile := filepath.Clean(expectedProgressFile)
+
+	if updateFile == expectedFile {
+		// The task progress file was updated, refresh the preview
+		go func() {
+			// Add retry mechanism for file access with exponential backoff
+			maxRetries := 5
+			baseDelay := 50 * time.Millisecond
+
+			for attempt := 0; attempt < maxRetries; attempt++ {
+				// Calculate delay with exponential backoff
+				delay := time.Duration(attempt) * baseDelay
+				if delay > 0 {
+					time.Sleep(delay)
+				}
+
+				err := m.implementPreview.RefreshFromProgressFile()
+				if err == nil {
+					// Success - break out of retry loop
+					return
+				}
+
+				// Check if it's a temporary file access error
+				if os.IsNotExist(err) {
+					// File might have been temporarily deleted/moved during write
+					continue
+				}
+
+				if strings.Contains(err.Error(), "permission denied") ||
+				   strings.Contains(err.Error(), "device or resource busy") {
+					// Temporary access issue - retry
+					continue
+				}
+
+				// For other errors, log and set error message on final attempt
+				if attempt == maxRetries-1 {
+					errorMsg := fmt.Sprintf("Failed to refresh task progress after %d attempts: %v", maxRetries, err)
+					m.implementPreview.SetSummary(errorMsg)
+				}
+			}
+		}()
+
+		// Show a brief loading indicator
+		return m, func() tea.Msg {
+			return TaskProgressRefreshMsg{Operation: payload.Operation}
+		}
+	}
+
+	return m, nil
 }
 
 // Message types for agent communication
@@ -262,6 +413,11 @@ type TaskProgressInitializedMsg struct{}
 // TaskProgressInitErrorMsg represents an error during task progress initialization
 type TaskProgressInitErrorMsg struct {
 	Err error
+}
+
+// TaskProgressRefreshMsg indicates the task progress file was updated
+type TaskProgressRefreshMsg struct {
+	Operation string // "created", "modified", "deleted"
 }
 
 // Legacy message types for backward compatibility
