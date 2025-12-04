@@ -181,6 +181,13 @@ func (m *BugModel) initializeBugPhase() tea.Cmd {
 	// Clear approval view when not in approval phase
 	m.approvalView = nil
 
+	// Clear chat view state when transitioning phases to ensure fresh context
+	if m.PhaseModel != nil {
+		m.PhaseModel.chatView.ResetScrollState()
+		// Clear messages for fresh phase start (emulate feature workflow behavior)
+		m.PhaseModel.chatView.SetMessages([]types.ChatMessage{})
+	}
+
 	switch m.session.CurrentPhase {
 	case types.BugPhasePlan:
 		// Initialize agent for plan phase
@@ -208,6 +215,11 @@ func (m *BugModel) initializeBugPhase() tea.Cmd {
 func (m *BugModel) reinitializeAgent() tea.Cmd {
 	if m.PhaseModel == nil {
 		return nil
+	}
+
+	// Clear chat history when entering tasks phase to ensure fresh context
+	if m.session != nil && m.session.CurrentPhase == types.BugPhaseTasks {
+		m.session.TasksChatHistory = []types.ChatMessage{}
 	}
 
 	// Return a command that will reinitialize the agent
