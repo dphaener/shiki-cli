@@ -104,6 +104,10 @@ func NewImplementModel(session *types.WorkflowSession, eventBus *events.EventBus
 		RefreshPreviewFunc: func() {
 			model.refreshImplementPreview()
 		},
+		OnToolUseFunc: func(toolName string, args map[string]interface{}) {
+			// Refresh preview after tool use - agent may have written files
+			model.refreshImplementPreview()
+		},
 		GetChatHistoryFunc: func() []types.ChatMessage {
 			return session.ImplChatHistory
 		},
@@ -279,7 +283,7 @@ func (m *ImplementModel) refreshImplementPreview() {
 		}
 
 		if strings.Contains(loadErr.Error(), "permission denied") ||
-		   strings.Contains(loadErr.Error(), "device or resource busy") {
+			strings.Contains(loadErr.Error(), "device or resource busy") {
 			// Temporary access issue - retry after a short delay
 			if attempt < maxRetries-1 {
 				time.Sleep(100 * time.Millisecond)
@@ -381,7 +385,7 @@ func (m *ImplementModel) handleFileUpdateEvent(payload events.FileUpdatedPayload
 				}
 
 				if strings.Contains(err.Error(), "permission denied") ||
-				   strings.Contains(err.Error(), "device or resource busy") {
+					strings.Contains(err.Error(), "device or resource busy") {
 					// Temporary access issue - retry
 					continue
 				}
