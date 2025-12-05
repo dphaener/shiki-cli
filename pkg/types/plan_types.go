@@ -32,6 +32,38 @@ type PlanSession struct {
 	ContractsDir string `json:"contracts_dir"`
 }
 
+// GetIcon returns the phase-specific icon for display in the header.
+func (p PlanPhase) GetIcon() string {
+	switch p {
+	case PlanPhaseInterrogation:
+		return "💬"
+	case PlanPhaseResearch:
+		return "🔍"
+	case PlanPhaseDesign:
+		return "📐"
+	case PlanPhaseComplete:
+		return "✅"
+	default:
+		return "❓"
+	}
+}
+
+// GetText returns the phase display text for the header.
+func (p PlanPhase) GetText() string {
+	switch p {
+	case PlanPhaseInterrogation:
+		return "Planning Interrogation"
+	case PlanPhaseResearch:
+		return "Research Phase"
+	case PlanPhaseDesign:
+		return "Design Phase"
+	case PlanPhaseComplete:
+		return "Plan Complete"
+	default:
+		return "Unknown Phase"
+	}
+}
+
 // Plan event types
 const (
 	EventPlanChatMessage     EventType = "plan.chat_message"

@@ -2,6 +2,17 @@ package types
 
 import "time"
 
+// PreviewPhase defines the interface for phase types that can be displayed in preview headers.
+// All phase types (PlanPhase, SpecPhase, BugPhase, etc.) should implement this interface
+// to provide consistent header display across all preview components.
+type PreviewPhase interface {
+	// GetIcon returns the phase-specific icon for display in the header.
+	GetIcon() string
+
+	// GetText returns the phase display text for the header.
+	GetText() string
+}
+
 // SessionStatus represents the current state of a collaboration session
 type SessionStatus string
 

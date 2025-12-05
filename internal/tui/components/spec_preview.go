@@ -3,7 +3,6 @@ package components
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dphaener/shiki-cli/internal/tui/theme"
@@ -12,7 +11,7 @@ import (
 
 // SpecPreview manages the specification preview pane
 type SpecPreview struct {
-	viewport         viewport.Model
+	layout           PreviewLayout
 	content          string
 	renderedContent  string // Cached rendered markdown content
 	validationIssues []string
@@ -25,15 +24,18 @@ type SpecPreview struct {
 
 // NewSpecPreview creates a new spec preview
 func NewSpecPreview(width, height int) SpecPreview {
-	vp := viewport.New(width-4, height-4)
-	vp.YPosition = 0
+	// Initialize with a default phase - will be updated via SetPhase
+	defaultPhase := types.PhaseDiscovery
+	layout := NewPreviewLayout(defaultPhase)
+	layout.SetSize(width, height)
 
 	return SpecPreview{
-		viewport: vp,
-		width:    width,
-		height:   height,
-		visible:  true,
-		ready:    true,
+		layout:  layout,
+		phase:   defaultPhase,
+		width:   width,
+		height:  height,
+		visible: true,
+		ready:   true,
 	}
 }
 
@@ -50,22 +52,23 @@ func (s SpecPreview) Update(msg tea.Msg) (SpecPreview, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
 		case "up", "k":
-			s.viewport.LineUp(1)
+			s.layout.GetViewport().LineUp(1)
 			return s, nil
 		case "down", "j":
-			s.viewport.LineDown(1)
+			s.layout.GetViewport().LineDown(1)
 			return s, nil
 		case "pgup":
-			s.viewport.HalfViewUp()
+			s.layout.GetViewport().HalfViewUp()
 			return s, nil
 		case "pgdown":
-			s.viewport.HalfViewDown()
+			s.layout.GetViewport().HalfViewDown()
 			return s, nil
 		}
 	}
 
 	// Delegate other messages to viewport
-	s.viewport, cmd = s.viewport.Update(msg)
+	viewport := s.layout.GetViewport()
+	*viewport, cmd = viewport.Update(msg)
 	return s, cmd
 }
 
@@ -79,16 +82,8 @@ func (s SpecPreview) View() string {
 		return specHiddenStyle.Render("Preview hidden (Tab to show)")
 	}
 
-	// Add header with phase indicator
-	header := s.renderHeader()
-
-	// Use cached viewport content (set by SetContent/SetSize)
-	// Don't call SetContent here - it resets scroll position
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		header,
-		s.viewport.View(),
-	)
+	// Use layout view which handles header and viewport composition
+	return s.layout.View()
 }
 
 // SetSize updates the preview dimensions
@@ -96,8 +91,7 @@ func (s *SpecPreview) SetSize(width, height int) {
 	widthChanged := s.width != width
 	s.width = width
 	s.height = height
-	s.viewport.Width = width - 4
-	s.viewport.Height = height - 4
+	s.layout.SetSize(width, height)
 
 	// Re-render if width changed (affects markdown rendering) and we have content
 	if widthChanged && s.content != "" {
@@ -121,13 +115,27 @@ func (s *SpecPreview) updateRenderedContent() {
 	// Wrap content to viewport width to ensure proper line breaks
 	// The viewport counts lines by \n, so content that wraps visually
 	// without \n characters will break scrolling
-	wrappedContent := lipgloss.NewStyle().Width(s.viewport.Width).Render(rendered)
-	s.viewport.SetContent(wrappedContent)
+	viewport := s.layout.GetViewport()
+	wrappedContent := lipgloss.NewStyle().Width(viewport.Width).Render(rendered)
+	s.layout.SetContent(wrappedContent)
 }
 
-// SetPhase updates the current workflow phase
-func (s *SpecPreview) SetPhase(phase types.SpecifyPhase) {
+// SetSpecPhase updates the current workflow phase
+func (s *SpecPreview) SetSpecPhase(phase types.SpecifyPhase) {
 	s.phase = phase
+	s.layout.SetPhase(phase)
+}
+
+// GetPhase returns the current phase for header display
+func (s SpecPreview) GetPhase() types.PreviewPhase {
+	return s.phase
+}
+
+// SetPhase sets the current phase for header display (PreviewComponent interface)
+func (s *SpecPreview) SetPhase(phase types.PreviewPhase) {
+	if specPhase, ok := phase.(types.SpecifyPhase); ok {
+		s.SetSpecPhase(specPhase)
+	}
 }
 
 // SetValidationIssues updates the validation issues
@@ -145,24 +153,6 @@ func (s *SpecPreview) IsVisible() bool {
 	return s.visible
 }
 
-// renderHeader renders the preview header with phase info
-func (s *SpecPreview) renderHeader() string {
-	phaseIcon := s.getPhaseIcon()
-	phaseText := s.getPhaseText()
-
-	header := specHeaderStyle.Render(
-		lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			phaseIcon,
-			" ",
-			phaseText,
-		),
-	)
-
-	separator := specSeparatorStyle.Render(strings.Repeat("─", s.width-4))
-
-	return lipgloss.JoinVertical(lipgloss.Left, header, separator)
-}
 
 // renderContent renders the spec content with markdown
 func (s *SpecPreview) renderContent() string {
@@ -227,48 +217,9 @@ func (s *SpecPreview) renderValidationIssues() string {
 	return strings.Join(issues, "\n")
 }
 
-// getPhaseIcon returns an icon for the current phase
-func (s *SpecPreview) getPhaseIcon() string {
-	switch s.phase {
-	case types.PhaseDiscovery:
-		return phaseDiscoveryIcon.Render("🔍")
-	case types.PhaseGeneration:
-		return phaseGenerationIcon.Render("✍️")
-	case types.PhaseValidation:
-		return phaseValidationIcon.Render("✓")
-	case types.PhaseComplete:
-		return phaseCompleteIcon.Render("✅")
-	default:
-		return ""
-	}
-}
-
-// getPhaseText returns text for the current phase
-func (s *SpecPreview) getPhaseText() string {
-	switch s.phase {
-	case types.PhaseDiscovery:
-		return "Discovery Phase"
-	case types.PhaseGeneration:
-		return "Generating Specification"
-	case types.PhaseValidation:
-		return "Validating Specification"
-	case types.PhaseComplete:
-		return "Specification Complete"
-	default:
-		return "Specification Preview"
-	}
-}
 
 // Styles for spec preview using Sekkei Design System theme
 var (
-	specHeaderStyle = lipgloss.NewStyle().
-			Foreground(theme.Primary).
-			Bold(true).
-			Padding(0, 1)
-
-	specSeparatorStyle = lipgloss.NewStyle().
-				Foreground(theme.Border)
-
 	specEmptyStyle = lipgloss.NewStyle().
 			Foreground(theme.TextMuted).
 			Italic(true).
@@ -279,18 +230,6 @@ var (
 			Italic(true).
 			Align(lipgloss.Center).
 			Padding(2, 2)
-
-	phaseDiscoveryIcon = lipgloss.NewStyle().
-				Foreground(theme.Info)
-
-	phaseGenerationIcon = lipgloss.NewStyle().
-				Foreground(theme.Warning)
-
-	phaseValidationIcon = lipgloss.NewStyle().
-				Foreground(theme.Success)
-
-	phaseCompleteIcon = lipgloss.NewStyle().
-				Foreground(theme.Success)
 
 	validationHeaderStyle = lipgloss.NewStyle().
 				Foreground(theme.Warning).

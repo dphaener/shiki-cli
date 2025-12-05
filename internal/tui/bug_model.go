@@ -49,6 +49,14 @@ func (w *bugPreviewWrapper) SetContent(content string) {
 	w.preview.SetContent(content)
 }
 
+func (w *bugPreviewWrapper) GetPhase() types.PreviewPhase {
+	return w.preview.GetPhase()
+}
+
+func (w *bugPreviewWrapper) SetPhase(phase types.PreviewPhase) {
+	w.preview.SetPhase(phase)
+}
+
 func (w *bugPreviewWrapper) UpdatePreview(msg tea.Msg) tea.Cmd {
 	updated, cmd := w.preview.Update(msg)
 	*w.preview = updated

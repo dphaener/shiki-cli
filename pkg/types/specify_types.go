@@ -41,6 +41,38 @@ type ChatMessage struct {
 	Args      map[string]interface{} `json:"args,omitempty"` // Tool arguments for rich display
 }
 
+// GetIcon returns the phase-specific icon for display in the header.
+func (s SpecifyPhase) GetIcon() string {
+	switch s {
+	case PhaseDiscovery:
+		return "🔍"
+	case PhaseGeneration:
+		return "📝"
+	case PhaseValidation:
+		return "✅"
+	case PhaseComplete:
+		return "🎯"
+	default:
+		return "❓"
+	}
+}
+
+// GetText returns the phase display text for the header.
+func (s SpecifyPhase) GetText() string {
+	switch s {
+	case PhaseDiscovery:
+		return "Discovery Phase"
+	case PhaseGeneration:
+		return "Generating Specification"
+	case PhaseValidation:
+		return "Validating Specification"
+	case PhaseComplete:
+		return "Specification Complete"
+	default:
+		return "Unknown Phase"
+	}
+}
+
 // SpecifyEventType identifies specify-specific events
 type SpecifyEventType string
 

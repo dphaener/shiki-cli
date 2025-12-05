@@ -270,7 +270,7 @@ func TestImplementPreview_RenderProgressContent(t *testing.T) {
 	preview.renderProgressContent()
 
 	// Get the viewport content
-	content := preview.viewport.View()
+	content := preview.layout.GetViewport().View()
 
 	assert.NotEmpty(t, content, "Content should render")
 	assert.Contains(t, content, "Implementation Progress", "Should contain header")
@@ -674,7 +674,7 @@ func TestImplementPreview_FullWorkflow(t *testing.T) {
 
 	// Test rendering
 	preview.renderProgressContent()
-	content := preview.viewport.View()
+	content := preview.layout.GetViewport().View()
 
 	assert.NotEmpty(t, content, "Should render content")
 	assert.Contains(t, content, "Implementation Progress", "Should contain header")
@@ -700,7 +700,7 @@ func TestImplementPreview_ErrorRecovery(t *testing.T) {
 	preview.renderProgressContent()
 
 	// Should render without crashing, even with no/minimal data
-	content := preview.viewport.View()
+	content := preview.layout.GetViewport().View()
 	assert.NotEmpty(t, content, "Should render something even with malformed input")
 }
 
@@ -716,7 +716,7 @@ func TestImplementPreview_EmptyStateHandling(t *testing.T) {
 	preview.SetWorkPackages(result)
 	preview.renderProgressContent()
 
-	content := preview.viewport.View()
+	content := preview.layout.GetViewport().View()
 	assert.NotEmpty(t, content, "Should render empty state")
 	assert.Contains(t, content, "No progress data available", "Should show appropriate message")
 }
@@ -746,7 +746,7 @@ func TestImplementPreview_ProgressUpdates(t *testing.T) {
 
 	// Verify rendering reflects the change
 	preview.renderProgressContent()
-	content := preview.viewport.View()
+	content := preview.layout.GetViewport().View()
 	assert.Contains(t, content, "WP01", "Should still show work package")
 
 	// Note: The specific status display format depends on implementation

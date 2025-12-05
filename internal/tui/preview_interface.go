@@ -1,6 +1,9 @@
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dphaener/shiki-cli/pkg/types"
+)
 
 // PreviewComponent defines the interface for preview panes in phase models.
 // All preview components (PlanPreview, TasksPreview, ImplementPreview, SpecPreview)
@@ -17,6 +20,12 @@ type PreviewComponent interface {
 
 	// SetContent updates the preview content from a string (typically file content).
 	SetContent(content string)
+
+	// GetPhase returns the current phase for header display.
+	GetPhase() types.PreviewPhase
+
+	// SetPhase sets the current phase for header display.
+	SetPhase(phase types.PreviewPhase)
 }
 
 // PreviewUpdater wraps a PreviewComponent with its Update method.
@@ -51,6 +60,14 @@ func (w *PreviewWrapper[T]) SetSize(width, height int) {
 
 func (w *PreviewWrapper[T]) SetContent(content string) {
 	w.Preview.SetContent(content)
+}
+
+func (w *PreviewWrapper[T]) GetPhase() types.PreviewPhase {
+	return w.Preview.GetPhase()
+}
+
+func (w *PreviewWrapper[T]) SetPhase(phase types.PreviewPhase) {
+	w.Preview.SetPhase(phase)
 }
 
 func (w *PreviewWrapper[T]) UpdatePreview(msg tea.Msg) tea.Cmd {

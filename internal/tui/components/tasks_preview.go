@@ -3,31 +3,35 @@ package components
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dphaener/shiki-cli/internal/tui/theme"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // TasksPreview displays a preview of the generated tasks.md file
 type TasksPreview struct {
-	viewport viewport.Model
-	content  string
-	width    int
-	height   int
-	ready    bool
+	layout  PreviewLayout
+	content string
+	phase   types.WorkflowPhase
+	width   int
+	height  int
+	ready   bool
 }
 
 // NewTasksPreview creates a new tasks preview component
 func NewTasksPreview(width, height int) TasksPreview {
-	vp := viewport.New(width-4, height-4)
-	vp.YPosition = 0
+	// Initialize with a default task phase - will be updated via SetPhase
+	defaultPhase := types.WorkflowPhaseTasks
+	layout := NewPreviewLayout(defaultPhase)
+	layout.SetSize(width, height)
 
 	return TasksPreview{
-		viewport: vp,
-		width:    width,
-		height:   height,
-		ready:    false,
+		layout: layout,
+		phase:  defaultPhase,
+		width:  width,
+		height: height,
+		ready:  false,
 	}
 }
 
@@ -39,7 +43,8 @@ func (p TasksPreview) Init() tea.Cmd {
 // Update handles messages for the preview
 func (p TasksPreview) Update(msg tea.Msg) (TasksPreview, tea.Cmd) {
 	var cmd tea.Cmd
-	p.viewport, cmd = p.viewport.Update(msg)
+	viewport := p.layout.GetViewport()
+	*viewport, cmd = viewport.Update(msg)
 	return p, cmd
 }
 
@@ -50,18 +55,18 @@ func (p TasksPreview) View() string {
 	}
 
 	if p.content == "" {
-		return tasksPreviewPlaceholderStyle.Render("No tasks generated yet.\nThe AI will create tasks.md based on the spec and plan.")
+		placeholder := tasksPreviewPlaceholderStyle.Render("No tasks generated yet.\nThe AI will create tasks.md based on the spec and plan.")
+		p.layout.SetContent(placeholder)
 	}
 
-	return p.viewport.View()
+	return p.layout.View()
 }
 
 // SetSize updates the preview dimensions
 func (p *TasksPreview) SetSize(width, height int) {
 	p.width = width
 	p.height = height
-	p.viewport.Width = width
-	p.viewport.Height = height
+	p.layout.SetSize(width, height)
 	p.ready = true
 
 	// Re-render content with new size
@@ -78,13 +83,32 @@ func (p *TasksPreview) SetContent(content string) {
 	}
 }
 
+// SetTaskPhase updates the current workflow phase
+func (p *TasksPreview) SetTaskPhase(phase types.WorkflowPhase) {
+	p.phase = phase
+	p.layout.SetPhase(phase)
+}
+
+// GetPhase returns the current phase for header display
+func (p TasksPreview) GetPhase() types.PreviewPhase {
+	return p.phase
+}
+
+// SetPhase sets the current phase for header display (PreviewComponent interface)
+func (p *TasksPreview) SetPhase(phase types.PreviewPhase) {
+	if workflowPhase, ok := phase.(types.WorkflowPhase); ok {
+		p.SetTaskPhase(workflowPhase)
+	}
+}
+
 // renderContent renders the markdown content
 func (p *TasksPreview) renderContent() {
 	// Simple markdown rendering
-	rendered := renderTasksMarkdown(p.content, p.width)
-	p.viewport.SetContent(rendered)
+	viewport := p.layout.GetViewport()
+	rendered := renderTasksMarkdown(p.content, viewport.Width)
+	p.layout.SetContent(rendered)
 	// Scroll to bottom to show latest content
-	p.viewport.GotoBottom()
+	viewport.GotoBottom()
 }
 
 // renderTasksMarkdown renders tasks markdown with basic formatting

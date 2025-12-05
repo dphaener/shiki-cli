@@ -60,6 +60,14 @@ func (w *specPreviewWrapper) SetContent(content string) {
 	w.preview.SetContent(content)
 }
 
+func (w *specPreviewWrapper) GetPhase() types.PreviewPhase {
+	return w.preview.GetPhase()
+}
+
+func (w *specPreviewWrapper) SetPhase(phase types.PreviewPhase) {
+	w.preview.SetPhase(phase)
+}
+
 func (w *specPreviewWrapper) UpdatePreview(msg tea.Msg) tea.Cmd {
 	updated, cmd := w.preview.Update(msg)
 	*w.preview = updated

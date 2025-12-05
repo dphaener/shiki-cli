@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dphaener/shiki-cli/internal/tasks"
 	"github.com/dphaener/shiki-cli/internal/tui/theme"
+	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
 // TaskStatus represents the status of an implementation task
@@ -35,12 +35,13 @@ type ImplementTask struct {
 
 // ImplementPreview displays implementation progress with task status
 type ImplementPreview struct {
-	viewport viewport.Model
-	tasks    []ImplementTask
-	width    int
-	height   int
-	ready    bool
-	summary  string
+	layout  PreviewLayout
+	tasks   []ImplementTask
+	phase   types.WorkflowPhase
+	width   int
+	height  int
+	ready   bool
+	summary string
 
 	// Task progress tracking
 	progressTracker  *tasks.ProgressTracker
@@ -53,15 +54,18 @@ type ImplementPreview struct {
 
 // NewImplementPreview creates a new implement preview component
 func NewImplementPreview(width, height int) ImplementPreview {
-	vp := viewport.New(width-4, height-4)
-	vp.YPosition = 0
+	// Initialize with a default implement phase - will be updated via SetPhase
+	defaultPhase := types.WorkflowPhaseImplement
+	layout := NewPreviewLayout(defaultPhase)
+	layout.SetSize(width, height)
 
 	return ImplementPreview{
-		viewport: vp,
-		tasks:    []ImplementTask{},
-		width:    width,
-		height:   height,
-		ready:    false,
+		layout: layout,
+		tasks:  []ImplementTask{},
+		phase:  defaultPhase,
+		width:  width,
+		height: height,
+		ready:  false,
 	}
 }
 
@@ -73,7 +77,8 @@ func (p ImplementPreview) Init() tea.Cmd {
 // Update handles messages for the preview
 func (p ImplementPreview) Update(msg tea.Msg) (ImplementPreview, tea.Cmd) {
 	var cmd tea.Cmd
-	p.viewport, cmd = p.viewport.Update(msg)
+	viewport := p.layout.GetViewport()
+	*viewport, cmd = viewport.Update(msg)
 	return p, cmd
 }
 
@@ -84,18 +89,18 @@ func (p ImplementPreview) View() string {
 	}
 
 	if len(p.tasks) == 0 {
-		return implementPreviewPlaceholderStyle.Render("No tasks loaded yet.\nTasks will appear as implementation begins.")
+		placeholder := implementPreviewPlaceholderStyle.Render("No tasks loaded yet.\nTasks will appear as implementation begins.")
+		p.layout.SetContent(placeholder)
 	}
 
-	return p.viewport.View()
+	return p.layout.View()
 }
 
 // SetSize updates the preview dimensions
 func (p *ImplementPreview) SetSize(width, height int) {
 	p.width = width
 	p.height = height
-	p.viewport.Width = width
-	p.viewport.Height = height
+	p.layout.SetSize(width, height)
 	p.ready = true
 
 	// Re-render content with new size
@@ -122,6 +127,24 @@ func (p *ImplementPreview) SetSummary(summary string) {
 // For ImplementPreview, this sets the summary text.
 func (p *ImplementPreview) SetContent(content string) {
 	p.SetSummary(content)
+}
+
+// SetImplementPhase updates the current workflow phase
+func (p *ImplementPreview) SetImplementPhase(phase types.WorkflowPhase) {
+	p.phase = phase
+	p.layout.SetPhase(phase)
+}
+
+// GetPhase returns the current phase for header display
+func (p ImplementPreview) GetPhase() types.PreviewPhase {
+	return p.phase
+}
+
+// SetPhase sets the current phase for header display (PreviewComponent interface)
+func (p *ImplementPreview) SetPhase(phase types.PreviewPhase) {
+	if workflowPhase, ok := phase.(types.WorkflowPhase); ok {
+		p.SetImplementPhase(workflowPhase)
+	}
 }
 
 // UpdateTaskStatus updates the status of a specific task
@@ -185,7 +208,7 @@ func (p *ImplementPreview) renderContent() {
 		parts = append(parts, taskLine)
 	}
 
-	p.viewport.SetContent(strings.Join(parts, "\n"))
+	p.layout.SetContent(strings.Join(parts, "\n"))
 }
 
 // renderTask renders a single task with status indicator
@@ -328,13 +351,13 @@ func (p *ImplementPreview) renderProgressContent() {
 
 	if p.loadingError != nil {
 		parts = append(parts, implementPreviewFailedStyle.Render("Error: "+p.loadingError.Error()))
-		p.viewport.SetContent(strings.Join(parts, "\n"))
+		p.layout.SetContent(strings.Join(parts, "\n"))
 		return
 	}
 
 	if len(p.workPackages) == 0 {
 		parts = append(parts, implementPreviewPlaceholderStyle.Render("No progress data available"))
-		p.viewport.SetContent(strings.Join(parts, "\n"))
+		p.layout.SetContent(strings.Join(parts, "\n"))
 		return
 	}
 
@@ -406,7 +429,7 @@ func (p *ImplementPreview) renderProgressContent() {
 		parts = append(parts, "")
 	}
 
-	p.viewport.SetContent(strings.Join(parts, "\n"))
+	p.layout.SetContent(strings.Join(parts, "\n"))
 }
 
 // renderProgressTask renders a single task with progress status

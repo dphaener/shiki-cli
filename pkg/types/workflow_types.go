@@ -199,6 +199,54 @@ func IsApprovalPhase(phase WorkflowPhase) bool {
 		phase == WorkflowPhaseApproveTasks
 }
 
+// GetIcon returns the phase-specific icon for display in the header.
+func (w WorkflowPhase) GetIcon() string {
+	switch w {
+	case WorkflowPhaseSpecify:
+		return "📋"
+	case WorkflowPhaseApproveSpec:
+		return "✅"
+	case WorkflowPhasePlan:
+		return "📐"
+	case WorkflowPhaseApprovePlan:
+		return "✅"
+	case WorkflowPhaseTasks:
+		return "📝"
+	case WorkflowPhaseApproveTasks:
+		return "✅"
+	case WorkflowPhaseImplement:
+		return "⚙️"
+	case WorkflowPhaseComplete:
+		return "🎯"
+	default:
+		return "❓"
+	}
+}
+
+// GetText returns the phase display text for the header.
+func (w WorkflowPhase) GetText() string {
+	switch w {
+	case WorkflowPhaseSpecify:
+		return "Specification"
+	case WorkflowPhaseApproveSpec:
+		return "Approve Specification"
+	case WorkflowPhasePlan:
+		return "Planning"
+	case WorkflowPhaseApprovePlan:
+		return "Approve Plan"
+	case WorkflowPhaseTasks:
+		return "Task Breakdown"
+	case WorkflowPhaseApproveTasks:
+		return "Approve Tasks"
+	case WorkflowPhaseImplement:
+		return "Implementation"
+	case WorkflowPhaseComplete:
+		return "Complete"
+	default:
+		return "Unknown Phase"
+	}
+}
+
 // Workflow event types
 const (
 	EventWorkflowPhaseTransition EventType = "workflow.phase_transition"

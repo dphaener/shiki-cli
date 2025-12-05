@@ -4,7 +4,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
@@ -14,7 +13,7 @@ import (
 
 // BugPreview displays bug fix artifacts (plan, tasks, implementation progress)
 type BugPreview struct {
-	viewport    viewport.Model
+	layout      PreviewLayout
 	width       int
 	height      int
 	ready       bool
@@ -27,8 +26,10 @@ type BugPreview struct {
 
 // NewBugPreview creates a new bug preview component
 func NewBugPreview(width, height int) BugPreview {
-	vp := viewport.New(width-4, height-4)
-	vp.YPosition = 0
+	// Initialize with a default phase - will be updated via SetPhase
+	defaultPhase := types.BugPhasePlan
+	layout := NewPreviewLayout(defaultPhase)
+	layout.SetSize(width, height)
 
 	// Create markdown renderer
 	renderer, _ := glamour.NewTermRenderer(
@@ -37,11 +38,11 @@ func NewBugPreview(width, height int) BugPreview {
 	)
 
 	return BugPreview{
-		viewport:   vp,
+		layout:     layout,
 		width:      width,
 		height:     height,
 		ready:      false,
-		phase:      types.BugPhasePlan,
+		phase:      defaultPhase,
 		mdRenderer: renderer,
 	}
 }
@@ -54,7 +55,8 @@ func (p BugPreview) Init() tea.Cmd {
 // Update handles messages for the preview
 func (p BugPreview) Update(msg tea.Msg) (BugPreview, tea.Cmd) {
 	var cmd tea.Cmd
-	p.viewport, cmd = p.viewport.Update(msg)
+	viewport := p.layout.GetViewport()
+	*viewport, cmd = viewport.Update(msg)
 	return p, cmd
 }
 
@@ -65,10 +67,12 @@ func (p BugPreview) View() string {
 	}
 
 	if p.content == "" {
-		return bugPreviewPlaceholderStyle.Render(p.getPlaceholderText())
+		// Set placeholder content in layout viewport
+		placeholder := bugPreviewPlaceholderStyle.Render(p.getPlaceholderText())
+		p.layout.SetContent(placeholder)
 	}
 
-	return p.viewport.View()
+	return p.layout.View()
 }
 
 // getPlaceholderText returns phase-appropriate placeholder text
@@ -89,14 +93,14 @@ func (p BugPreview) getPlaceholderText() string {
 func (p *BugPreview) SetSize(width, height int) {
 	p.width = width
 	p.height = height
-	p.viewport.Width = width
-	p.viewport.Height = height
+	p.layout.SetSize(width, height)
 	p.ready = true
 
 	// Update markdown renderer with new width
+	viewport := p.layout.GetViewport()
 	p.mdRenderer, _ = glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(width-4),
+		glamour.WithWordWrap(viewport.Width),
 	)
 
 	// Re-render content with new size
@@ -113,9 +117,22 @@ func (p *BugPreview) SetContent(content string) {
 	}
 }
 
-// SetPhase updates the current phase
-func (p *BugPreview) SetPhase(phase types.BugPhase) {
+// SetBugPhase updates the current phase
+func (p *BugPreview) SetBugPhase(phase types.BugPhase) {
 	p.phase = phase
+	p.layout.SetPhase(phase)
+}
+
+// GetPhase returns the current phase for header display
+func (p BugPreview) GetPhase() types.PreviewPhase {
+	return p.phase
+}
+
+// SetPhase sets the current phase for header display (PreviewComponent interface)
+func (p *BugPreview) SetPhase(phase types.PreviewPhase) {
+	if bugPhase, ok := phase.(types.BugPhase); ok {
+		p.SetBugPhase(bugPhase)
+	}
 }
 
 // SetFiles sets the file paths for plan and tasks
@@ -163,14 +180,11 @@ func stripBugFrontmatter(content string) string {
 // renderContent renders the markdown content to the viewport
 func (p *BugPreview) renderContent() {
 	if p.content == "" {
-		p.viewport.SetContent(p.getPlaceholderText())
+		p.layout.SetContent(p.getPlaceholderText())
 		return
 	}
 
-	// Add phase header
-	header := p.getPhaseHeader()
-
-	// Render markdown
+	// Render markdown (no need for manual phase header, layout handles it)
 	rendered := p.content
 	if p.mdRenderer != nil {
 		if out, err := p.mdRenderer.Render(p.content); err == nil {
@@ -178,32 +192,9 @@ func (p *BugPreview) renderContent() {
 		}
 	}
 
-	fullContent := header + rendered
-	p.viewport.SetContent(fullContent)
+	p.layout.SetContent(rendered)
 }
 
-// getPhaseHeader returns a header string for the current phase
-func (p BugPreview) getPhaseHeader() string {
-	var title string
-	switch p.phase {
-	case types.BugPhasePlan:
-		title = "📋 Bug Fix Plan"
-	case types.BugPhaseApprovePlan:
-		title = "📋 Bug Fix Plan (Review)"
-	case types.BugPhaseTasks:
-		title = "📝 Implementation Tasks"
-	case types.BugPhaseApproveTasks:
-		title = "📝 Implementation Tasks (Review)"
-	case types.BugPhaseImplement:
-		title = "🔧 Implementation Progress"
-	case types.BugPhaseComplete:
-		title = "✅ Bug Fix Complete"
-	default:
-		title = "🐛 Bug Fix"
-	}
-
-	return bugPreviewHeaderStyle.Render(title) + "\n\n"
-}
 
 // GetPhaseStatus returns a status string for display
 func (p BugPreview) GetPhaseStatus() string {
@@ -231,11 +222,6 @@ var (
 					Foreground(theme.TextMuted).
 					Italic(true).
 					Align(lipgloss.Center)
-
-	bugPreviewHeaderStyle = lipgloss.NewStyle().
-				Foreground(theme.Primary).
-				Bold(true).
-				MarginBottom(1)
 
 	bugPreviewPhaseStyle = lipgloss.NewStyle().
 				Foreground(theme.Info).

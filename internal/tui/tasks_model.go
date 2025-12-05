@@ -42,6 +42,14 @@ func (w *tasksPreviewWrapper) SetContent(content string) {
 	w.preview.SetContent(content)
 }
 
+func (w *tasksPreviewWrapper) GetPhase() types.PreviewPhase {
+	return w.preview.GetPhase()
+}
+
+func (w *tasksPreviewWrapper) SetPhase(phase types.PreviewPhase) {
+	w.preview.SetPhase(phase)
+}
+
 func (w *tasksPreviewWrapper) UpdatePreview(msg tea.Msg) tea.Cmd {
 	updated, cmd := w.preview.Update(msg)
 	*w.preview = updated

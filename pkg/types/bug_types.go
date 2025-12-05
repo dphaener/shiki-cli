@@ -170,6 +170,46 @@ func (b BugPhase) IsApprovalPhase(phase BugPhase) bool {
 		phase == BugPhaseApproveTasks
 }
 
+// GetIcon returns the phase-specific icon for display in the header.
+func (b BugPhase) GetIcon() string {
+	switch b {
+	case BugPhasePlan:
+		return "📋"
+	case BugPhaseApprovePlan:
+		return "✅"
+	case BugPhaseTasks:
+		return "📝"
+	case BugPhaseApproveTasks:
+		return "✅"
+	case BugPhaseImplement:
+		return "⚙️"
+	case BugPhaseComplete:
+		return "🎯"
+	default:
+		return "❓"
+	}
+}
+
+// GetText returns the phase display text for the header.
+func (b BugPhase) GetText() string {
+	switch b {
+	case BugPhasePlan:
+		return "Bug Planning"
+	case BugPhaseApprovePlan:
+		return "Approve Plan"
+	case BugPhaseTasks:
+		return "Task Breakdown"
+	case BugPhaseApproveTasks:
+		return "Approve Tasks"
+	case BugPhaseImplement:
+		return "Implementation"
+	case BugPhaseComplete:
+		return "Bug Fix Complete"
+	default:
+		return "Unknown Phase"
+	}
+}
+
 // Bug workflow event types
 const (
 	EventBugWorkflowPhaseTransition EventType = "bug_workflow.phase_transition"

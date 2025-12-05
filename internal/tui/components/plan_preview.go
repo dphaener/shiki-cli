@@ -1,9 +1,6 @@
 package components
 
 import (
-	"strings"
-
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dphaener/shiki-cli/internal/tui/theme"
@@ -12,7 +9,7 @@ import (
 
 // PlanPreview manages the plan preview pane
 type PlanPreview struct {
-	viewport        viewport.Model
+	layout          PreviewLayout
 	content         string
 	renderedContent string // Cached rendered markdown content
 	phase           types.PlanPhase
@@ -24,15 +21,18 @@ type PlanPreview struct {
 
 // NewPlanPreview creates a new plan preview
 func NewPlanPreview(width, height int) PlanPreview {
-	vp := viewport.New(width-4, height-4)
-	vp.YPosition = 0
+	// Initialize with a default phase - will be updated via SetPhase
+	defaultPhase := types.PlanPhaseInterrogation
+	layout := NewPreviewLayout(defaultPhase)
+	layout.SetSize(width, height)
 
 	return PlanPreview{
-		viewport: vp,
-		width:    width,
-		height:   height,
-		visible:  true,
-		ready:    true,
+		layout:  layout,
+		phase:   defaultPhase,
+		width:   width,
+		height:  height,
+		visible: true,
+		ready:   true,
 	}
 }
 
@@ -49,22 +49,23 @@ func (p PlanPreview) Update(msg tea.Msg) (PlanPreview, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
 		case "up", "k":
-			p.viewport.LineUp(1)
+			p.layout.GetViewport().LineUp(1)
 			return p, nil
 		case "down", "j":
-			p.viewport.LineDown(1)
+			p.layout.GetViewport().LineDown(1)
 			return p, nil
 		case "pgup":
-			p.viewport.HalfViewUp()
+			p.layout.GetViewport().HalfViewUp()
 			return p, nil
 		case "pgdown":
-			p.viewport.HalfViewDown()
+			p.layout.GetViewport().HalfViewDown()
 			return p, nil
 		}
 	}
 
 	// Delegate other messages to viewport
-	p.viewport, cmd = p.viewport.Update(msg)
+	viewport := p.layout.GetViewport()
+	*viewport, cmd = viewport.Update(msg)
 	return p, cmd
 }
 
@@ -78,16 +79,8 @@ func (p PlanPreview) View() string {
 		return planHiddenStyle.Render("Preview hidden (Tab to show)")
 	}
 
-	// Add header with phase indicator
-	header := p.renderHeader()
-
-	// Use cached viewport content (set by SetContent/SetSize)
-	// Don't call SetContent here - it resets scroll position
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		header,
-		p.viewport.View(),
-	)
+	// Use layout view which handles header and viewport composition
+	return p.layout.View()
 }
 
 // SetSize updates the preview dimensions
@@ -95,8 +88,7 @@ func (p *PlanPreview) SetSize(width, height int) {
 	widthChanged := p.width != width
 	p.width = width
 	p.height = height
-	p.viewport.Width = width - 4
-	p.viewport.Height = height - 4
+	p.layout.SetSize(width, height)
 
 	// Re-render if width changed (affects markdown rendering) and we have content
 	if widthChanged && p.content != "" {
@@ -120,13 +112,27 @@ func (p *PlanPreview) updateRenderedContent() {
 	// Wrap content to viewport width to ensure proper line breaks
 	// The viewport counts lines by \n, so content that wraps visually
 	// without \n characters will break scrolling
-	wrappedContent := lipgloss.NewStyle().Width(p.viewport.Width).Render(rendered)
-	p.viewport.SetContent(wrappedContent)
+	viewport := p.layout.GetViewport()
+	wrappedContent := lipgloss.NewStyle().Width(viewport.Width).Render(rendered)
+	p.layout.SetContent(wrappedContent)
 }
 
-// SetPhase updates the current workflow phase
-func (p *PlanPreview) SetPhase(phase types.PlanPhase) {
+// SetPlanPhase updates the current workflow phase
+func (p *PlanPreview) SetPlanPhase(phase types.PlanPhase) {
 	p.phase = phase
+	p.layout.SetPhase(phase)
+}
+
+// GetPhase returns the current phase for header display
+func (p PlanPreview) GetPhase() types.PreviewPhase {
+	return p.phase
+}
+
+// SetPhase sets the current phase for header display (PreviewComponent interface)
+func (p *PlanPreview) SetPhase(phase types.PreviewPhase) {
+	if planPhase, ok := phase.(types.PlanPhase); ok {
+		p.SetPlanPhase(planPhase)
+	}
 }
 
 // Toggle toggles the preview visibility
@@ -139,24 +145,6 @@ func (p *PlanPreview) IsVisible() bool {
 	return p.visible
 }
 
-// renderHeader renders the preview header with phase info
-func (p *PlanPreview) renderHeader() string {
-	phaseIcon := p.getPhaseIcon()
-	phaseText := p.getPhaseText()
-
-	header := planHeaderStyle.Render(
-		lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			phaseIcon,
-			" ",
-			phaseText,
-		),
-	)
-
-	separator := planSeparatorStyle.Render(strings.Repeat("─", p.width-4))
-
-	return lipgloss.JoinVertical(lipgloss.Left, header, separator)
-}
 
 // renderContent renders the plan content with markdown
 func (p *PlanPreview) renderContent() string {
@@ -201,48 +189,9 @@ func (p *PlanPreview) renderEmptyState() string {
 	return planEmptyStyle.Render(message)
 }
 
-// getPhaseIcon returns an icon for the current phase
-func (p *PlanPreview) getPhaseIcon() string {
-	switch p.phase {
-	case types.PlanPhaseInterrogation:
-		return planPhaseInterrogationIcon.Render("💬")
-	case types.PlanPhaseResearch:
-		return planPhaseResearchIcon.Render("🔍")
-	case types.PlanPhaseDesign:
-		return planPhaseDesignIcon.Render("📐")
-	case types.PlanPhaseComplete:
-		return planPhaseCompleteIcon.Render("✅")
-	default:
-		return ""
-	}
-}
-
-// getPhaseText returns text for the current phase
-func (p *PlanPreview) getPhaseText() string {
-	switch p.phase {
-	case types.PlanPhaseInterrogation:
-		return "Planning Interrogation"
-	case types.PlanPhaseResearch:
-		return "Research Phase"
-	case types.PlanPhaseDesign:
-		return "Design Phase"
-	case types.PlanPhaseComplete:
-		return "Plan Complete"
-	default:
-		return "Plan Preview"
-	}
-}
 
 // Styles for plan preview using Sekkei Design System theme
 var (
-	planHeaderStyle = lipgloss.NewStyle().
-			Foreground(theme.Primary).
-			Bold(true).
-			Padding(0, 1)
-
-	planSeparatorStyle = lipgloss.NewStyle().
-				Foreground(theme.Border)
-
 	planEmptyStyle = lipgloss.NewStyle().
 			Foreground(theme.TextMuted).
 			Italic(true).
@@ -253,16 +202,4 @@ var (
 			Italic(true).
 			Align(lipgloss.Center).
 			Padding(2, 2)
-
-	planPhaseInterrogationIcon = lipgloss.NewStyle().
-					Foreground(theme.Info)
-
-	planPhaseResearchIcon = lipgloss.NewStyle().
-				Foreground(theme.Warning)
-
-	planPhaseDesignIcon = lipgloss.NewStyle().
-				Foreground(theme.Success)
-
-	planPhaseCompleteIcon = lipgloss.NewStyle().
-				Foreground(theme.Success)
 )
