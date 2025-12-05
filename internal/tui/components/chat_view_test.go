@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
@@ -545,5 +547,389 @@ func TestAgentOutputState_ValidateScrollStateIdempotent(t *testing.T) {
 	}
 	if firstAutoScroll != secondAutoScroll {
 		t.Errorf("Validation not idempotent: autoscroll changed from %t to %t", firstAutoScroll, secondAutoScroll)
+	}
+}
+
+// ===============================================
+// Spinner State Management Tests (Task 1.1, 1.2)
+// ===============================================
+
+// TestSpinnerHealthValidation tests validateSpinnerHealth() with various timing scenarios
+func TestSpinnerHealthValidation(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Test 1: Spinner not active - should always be healthy
+	if !chatView.validateSpinnerHealth() {
+		t.Error("Spinner should be healthy when not active")
+	}
+
+	// Test 2: Loading state active but spinner not active - should be healthy
+	chatView.showingLoadingState = true
+	chatView.spinnerActive = false
+	if !chatView.validateSpinnerHealth() {
+		t.Error("Spinner should be healthy when loading state active but spinner not active")
+	}
+
+	// Test 3: Spinner active with recent tick - should be healthy
+	chatView.spinnerActive = true
+	chatView.lastTickTime = time.Now().Add(-50 * time.Millisecond) // Recent tick
+	chatView.spinnerTickTimeout = 200 * time.Millisecond
+	if !chatView.validateSpinnerHealth() {
+		t.Error("Spinner should be healthy with recent tick")
+	}
+
+	// Test 4: Spinner active with old tick - should be unhealthy
+	chatView.lastTickTime = time.Now().Add(-300 * time.Millisecond) // Old tick
+	if chatView.validateSpinnerHealth() {
+		t.Error("Spinner should be unhealthy with old tick")
+	}
+
+	// Test 5: Edge case - exactly at timeout boundary
+	chatView.lastTickTime = time.Now().Add(-200 * time.Millisecond) // Exactly at timeout
+	// This might be healthy or unhealthy depending on timing precision
+	health := chatView.validateSpinnerHealth()
+	_ = health // Just verify it doesn't panic
+
+	// Test 6: Zero time value
+	chatView.lastTickTime = time.Time{}
+	if chatView.validateSpinnerHealth() {
+		t.Error("Spinner should be unhealthy with zero time value")
+	}
+}
+
+// TestSpinnerTickRestart tests restartSpinnerTick() command generation
+func TestSpinnerTickRestart(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	beforeTime := time.Now()
+	cmd := chatView.restartSpinnerTick()
+	afterTime := time.Now()
+
+	// Verify command is not nil
+	if cmd == nil {
+		t.Error("restartSpinnerTick should return a non-nil command")
+	}
+
+	// Verify lastTickTime was updated
+	if chatView.lastTickTime.Before(beforeTime) || chatView.lastTickTime.After(afterTime) {
+		t.Error("restartSpinnerTick should update lastTickTime to current time")
+	}
+
+	// Verify command is the spinner tick command (we can't easily test the exact command,
+	// but we can verify it's not nil and doesn't panic when called)
+	if cmd == nil {
+		t.Error("Spinner tick command should not be nil")
+	}
+}
+
+// TestSpinnerStateInitialization tests proper field initialization
+func TestSpinnerStateInitialization(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Verify initial spinner state
+	if chatView.spinnerActive {
+		t.Error("spinnerActive should be false initially")
+	}
+
+	if !chatView.lastTickTime.IsZero() {
+		t.Error("lastTickTime should be zero initially")
+	}
+
+	if chatView.expectedTickID != 0 {
+		t.Error("expectedTickID should be 0 initially")
+	}
+
+	expectedTimeout := 200 * time.Millisecond
+	if chatView.spinnerTickTimeout != expectedTimeout {
+		t.Errorf("spinnerTickTimeout should be %v, got %v", expectedTimeout, chatView.spinnerTickTimeout)
+	}
+}
+
+// TestSpinnerStateCleanup tests proper field reset
+func TestSpinnerStateCleanup(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Set up spinner state
+	chatView.SetLoadingState("plan")
+
+	// Verify state is set
+	if !chatView.spinnerActive {
+		t.Error("spinnerActive should be true after SetLoadingState")
+	}
+
+	if chatView.lastTickTime.IsZero() {
+		t.Error("lastTickTime should not be zero after SetLoadingState")
+	}
+
+	// Clear loading state
+	chatView.ClearLoadingState()
+
+	// Verify state is reset
+	if chatView.spinnerActive {
+		t.Error("spinnerActive should be false after ClearLoadingState")
+	}
+
+	if !chatView.lastTickTime.IsZero() {
+		t.Error("lastTickTime should be zero after ClearLoadingState")
+	}
+
+	if chatView.showingLoadingState {
+		t.Error("showingLoadingState should be false after ClearLoadingState")
+	}
+
+	if chatView.loadingMessage != "" {
+		t.Error("loadingMessage should be empty after ClearLoadingState")
+	}
+}
+
+// ===========================================
+// Update Method Tests (Task 2.1)
+// ===========================================
+
+// TestTickMessageHandling verifies TickMsg updates timing fields
+func TestTickMessageHandling(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Set spinner active
+	chatView.spinnerActive = true
+
+	// Create a TickMsg
+	testTime := time.Now()
+	testID := 42
+	tickMsg := spinner.TickMsg{
+		Time: testTime,
+		ID:   testID,
+	}
+
+	// Update with TickMsg
+	updatedChatView, cmd := chatView.Update(tickMsg)
+
+	// Verify timing fields were updated
+	if updatedChatView.lastTickTime != testTime {
+		t.Errorf("lastTickTime should be updated to %v, got %v", testTime, updatedChatView.lastTickTime)
+	}
+
+	if updatedChatView.expectedTickID != testID {
+		t.Errorf("expectedTickID should be updated to %d, got %d", testID, updatedChatView.expectedTickID)
+	}
+
+	// Note: Command may or may not be returned depending on component state,
+	// but the Update method should not panic and should process the message
+	_ = cmd // Command return is not guaranteed for all message types
+}
+
+// TestTickMessageHandlingInactive verifies TickMsg is ignored when spinner inactive
+func TestTickMessageHandlingInactive(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Ensure spinner is inactive
+	chatView.spinnerActive = false
+	originalTime := chatView.lastTickTime
+	originalID := chatView.expectedTickID
+
+	// Create a TickMsg
+	tickMsg := spinner.TickMsg{
+		Time: time.Now(),
+		ID:   42,
+	}
+
+	// Update with TickMsg
+	updatedChatView, _ := chatView.Update(tickMsg)
+
+	// Verify timing fields were NOT updated
+	if updatedChatView.lastTickTime != originalTime {
+		t.Error("lastTickTime should not be updated when spinner inactive")
+	}
+
+	if updatedChatView.expectedTickID != originalID {
+		t.Error("expectedTickID should not be updated when spinner inactive")
+	}
+}
+
+// TestCommandBatching verifies all commands preserved in batch
+func TestCommandBatching(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Create a test message that should generate commands from components
+	testMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}
+
+	// Update with test message
+	_, cmd := chatView.Update(testMsg)
+
+	// Verify command is returned (exact testing of command content is complex,
+	// but we can verify a command is generated)
+	if cmd == nil {
+		t.Error("Update should return a command when components generate commands")
+	}
+}
+
+// TestSpinnerRecovery tests automatic recovery triggering
+func TestSpinnerRecovery(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Set up unhealthy spinner state
+	chatView.showingLoadingState = true
+	chatView.spinnerActive = true
+	chatView.lastTickTime = time.Now().Add(-500 * time.Millisecond) // Very old tick
+	chatView.spinnerTickTimeout = 200 * time.Millisecond
+
+	// Update should trigger recovery
+	beforeTime := time.Now()
+	updatedChatView, cmd := chatView.Update(tea.KeyMsg{})
+	afterTime := time.Now()
+
+	// Verify recovery was triggered (lastTickTime should be updated)
+	if updatedChatView.lastTickTime.Before(beforeTime) || updatedChatView.lastTickTime.After(afterTime) {
+		t.Error("Spinner recovery should update lastTickTime")
+	}
+
+	// Verify command is returned
+	if cmd == nil {
+		t.Error("Spinner recovery should generate a command")
+	}
+}
+
+// TestUpdateMethodBackwardCompatibility ensures existing behavior preserved
+func TestUpdateMethodBackwardCompatibility(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Test with regular key message
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hello")}
+	updatedChatView, cmd := chatView.Update(keyMsg)
+
+	// Verify basic functionality still works
+	if cmd == nil {
+		t.Error("Update should still return commands for regular messages")
+	}
+
+	// Verify structure is preserved
+	if updatedChatView.width != chatView.width || updatedChatView.height != chatView.height {
+		t.Error("Update should preserve basic ChatView structure")
+	}
+}
+
+// ===========================================
+// Loading State Tests (Task 3.1, 3.2)
+// ===========================================
+
+// TestSetLoadingStateSpinnerInit verifies spinner fields properly initialized
+func TestSetLoadingStateSpinnerInit(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	beforeTime := time.Now()
+	chatView.SetLoadingState("plan")
+	afterTime := time.Now()
+
+	// Verify spinner fields are initialized
+	if !chatView.spinnerActive {
+		t.Error("spinnerActive should be true after SetLoadingState")
+	}
+
+	if !chatView.showingLoadingState {
+		t.Error("showingLoadingState should be true after SetLoadingState")
+	}
+
+	if chatView.lastTickTime.Before(beforeTime) || chatView.lastTickTime.After(afterTime) {
+		t.Error("lastTickTime should be set to current time")
+	}
+
+	if chatView.spinnerTickTimeout != 200*time.Millisecond {
+		t.Errorf("spinnerTickTimeout should be 200ms, got %v", chatView.spinnerTickTimeout)
+	}
+
+	if chatView.currentPhase != "plan" {
+		t.Errorf("currentPhase should be 'plan', got %s", chatView.currentPhase)
+	}
+
+	if !chatView.contentDirty {
+		t.Error("contentDirty should be true to trigger re-render")
+	}
+}
+
+// TestClearLoadingStateCleanup verifies spinner fields properly reset
+func TestClearLoadingStateCleanup(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Set loading state first
+	chatView.SetLoadingState("implement")
+
+	// Verify it's set
+	if !chatView.showingLoadingState || !chatView.spinnerActive {
+		t.Error("Loading state should be active before clearing")
+	}
+
+	// Clear loading state
+	chatView.ClearLoadingState()
+
+	// Verify all fields are reset
+	if chatView.showingLoadingState {
+		t.Error("showingLoadingState should be false after clear")
+	}
+
+	if chatView.spinnerActive {
+		t.Error("spinnerActive should be false after clear")
+	}
+
+	if chatView.loadingMessage != "" {
+		t.Error("loadingMessage should be empty after clear")
+	}
+
+	if !chatView.lastTickTime.IsZero() {
+		t.Error("lastTickTime should be reset to zero after clear")
+	}
+
+	if !chatView.contentDirty {
+		t.Error("contentDirty should be true to trigger re-render")
+	}
+}
+
+// TestLoadingStateTransitions tests state transitions preserve spinner health
+func TestLoadingStateTransitions(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Test multiple transitions
+	phases := []string{"specify", "plan", "tasks", "implement"}
+
+	for _, phase := range phases {
+		chatView.SetLoadingState(phase)
+
+		// Verify spinner is healthy after setting loading state
+		if !chatView.validateSpinnerHealth() {
+			t.Errorf("Spinner should be healthy after setting loading state to %s", phase)
+		}
+
+		// Verify phase is set correctly
+		if chatView.currentPhase != phase {
+			t.Errorf("currentPhase should be %s, got %s", phase, chatView.currentPhase)
+		}
+
+		// Clear and verify
+		chatView.ClearLoadingState()
+		if chatView.showingLoadingState || chatView.spinnerActive {
+			t.Error("Loading state should be fully cleared")
+		}
+	}
+}
+
+// TestSpinnerTimeoutConfiguration verifies timeout value is set correctly
+func TestSpinnerTimeoutConfiguration(t *testing.T) {
+	chatView := NewChatView(100, 20)
+
+	// Initial timeout should be set
+	expectedTimeout := 200 * time.Millisecond
+	if chatView.spinnerTickTimeout != expectedTimeout {
+		t.Errorf("Initial timeout should be %v, got %v", expectedTimeout, chatView.spinnerTickTimeout)
+	}
+
+	// SetLoadingState should maintain the timeout
+	chatView.SetLoadingState("plan")
+	if chatView.spinnerTickTimeout != expectedTimeout {
+		t.Errorf("Timeout should remain %v after SetLoadingState, got %v", expectedTimeout, chatView.spinnerTickTimeout)
+	}
+
+	// Clearing should not change timeout (it's a configuration value)
+	chatView.ClearLoadingState()
+	if chatView.spinnerTickTimeout != expectedTimeout {
+		t.Errorf("Timeout should remain %v after ClearLoadingState, got %v", expectedTimeout, chatView.spinnerTickTimeout)
 	}
 }

@@ -40,6 +40,12 @@ type ChatView struct {
 	loadingMessage      string         // Message to display while loading
 	spinner             spinner.Model  // Animated spinner for loading state
 	currentPhase        string         // Current workflow phase for context
+
+	// Spinner state tracking fields for health monitoring and recovery
+	spinnerActive       bool          // Track if spinner should be animating
+	lastTickTime        time.Time     // Last successful TickMsg timestamp
+	expectedTickID      int           // Expected next tick ID for validation
+	spinnerTickTimeout  time.Duration // Max time between ticks before recovery (default: 200ms)
 }
 
 // NewChatView creates a new chat view
@@ -64,13 +70,17 @@ func NewChatView(width, height int) ChatView {
 	s.Style = lipgloss.NewStyle().Foreground(theme.Primary)
 
 	return ChatView{
-		viewport: vp,
-		textarea: ta,
-		messages: []types.ChatMessage{},
-		width:    width,
-		height:   height,
-		ready:    false,
-		spinner:  s,
+		viewport:           vp,
+		textarea:           ta,
+		messages:           []types.ChatMessage{},
+		width:              width,
+		height:             height,
+		ready:              false,
+		spinner:            s,
+		spinnerActive:      false,
+		lastTickTime:       time.Time{},
+		expectedTickID:     0,
+		spinnerTickTimeout: 200 * time.Millisecond, // Per Bubble Tea defaults
 	}
 }
 
@@ -81,22 +91,38 @@ func (c ChatView) Init() tea.Cmd {
 
 // Update implements tea.Model
 func (c ChatView) Update(msg tea.Msg) (ChatView, tea.Cmd) {
-	var (
-		vpCmd      tea.Cmd
-		taCmd      tea.Cmd
-		spinnerCmd tea.Cmd
-	)
+	var cmds []tea.Cmd
 
+	// Handle spinner TickMsg explicitly (per Bubble Tea docs)
+	if tickMsg, ok := msg.(spinner.TickMsg); ok && c.spinnerActive {
+		c.lastTickTime = tickMsg.Time
+		c.expectedTickID = tickMsg.ID
+	}
+
+	// Update all components
+	var vpCmd, taCmd, spinnerCmd tea.Cmd
 	c.viewport, vpCmd = c.viewport.Update(msg)
 	c.textarea, taCmd = c.textarea.Update(msg)
-
-	// Always update spinner to keep tick chain alive
 	c.spinner, spinnerCmd = c.spinner.Update(msg)
 
-	// Adjust textarea height based on content for multi-line support
-	c.adjustTextareaHeight()
+	// Collect commands safely
+	if vpCmd != nil {
+		cmds = append(cmds, vpCmd)
+	}
+	if taCmd != nil {
+		cmds = append(cmds, taCmd)
+	}
+	if spinnerCmd != nil {
+		cmds = append(cmds, spinnerCmd)
+	}
 
-	return c, tea.Batch(vpCmd, taCmd, spinnerCmd)
+	// Spinner health check and recovery
+	if !c.validateSpinnerHealth() {
+		cmds = append(cmds, c.restartSpinnerTick())
+	}
+
+	c.adjustTextareaHeight()
+	return c, tea.Batch(cmds...)
 }
 
 // View implements tea.Model
@@ -500,13 +526,13 @@ I'll help you create a comprehensive specification for your feature.`
 // The phase parameter should be one of: "specify", "plan", "tasks", "implement".
 func (c *ChatView) SetLoadingState(phase string) {
 	c.showingLoadingState = true
+	c.spinnerActive = true
+	c.lastTickTime = time.Now()
+	c.spinnerTickTimeout = 200 * time.Millisecond // Per Bubble Tea defaults
 	c.currentPhase = phase
-
-	// Get last user message for context
-	lastUserMsg := c.getLastUserMessage()
-
-	// Generate contextual loading message
-	c.loadingMessage = GenerateLoadingMessage(lastUserMsg, phase)
+	c.loadingMessage = GenerateLoadingMessage(c.getLastUserMessage(), phase)
+	// Ensure spinner starts ticking immediately
+	c.contentDirty = true
 }
 
 // getLastUserMessage returns the content of the most recent user message.
@@ -522,8 +548,10 @@ func (c *ChatView) getLastUserMessage() string {
 // ClearLoadingState removes the loading message from the chat area
 func (c *ChatView) ClearLoadingState() {
 	c.showingLoadingState = false
+	c.spinnerActive = false
 	c.loadingMessage = ""
-	c.contentDirty = true // Trigger re-render to remove loading message
+	c.lastTickTime = time.Time{} // Reset tick tracking
+	c.contentDirty = true
 }
 
 // IsShowingLoading returns whether the chat is currently showing a loading state
@@ -569,4 +597,18 @@ func (c *ChatView) ResetScrollState() {
 func (c *ChatView) ResetToBottom() {
 	c.viewport.GotoBottom()
 	c.contentDirty = true
+}
+
+// validateSpinnerHealth checks if spinner is receiving expected TickMsg
+func (c *ChatView) validateSpinnerHealth() bool {
+	if !c.showingLoadingState || !c.spinnerActive {
+		return true // Not expected to be ticking
+	}
+	return time.Since(c.lastTickTime) <= c.spinnerTickTimeout
+}
+
+// restartSpinnerTick forces a new tick command when spinner health fails
+func (c *ChatView) restartSpinnerTick() tea.Cmd {
+	c.lastTickTime = time.Now()
+	return c.spinner.Tick
 }
