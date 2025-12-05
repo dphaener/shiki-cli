@@ -1,7 +1,9 @@
 package components
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,10 +20,11 @@ type BugPreview struct {
 	height      int
 	ready       bool
 	content     string
-	phase       types.BugPhase
-	planFile    string
-	tasksFile   string
-	mdRenderer  *glamour.TermRenderer
+	phase            types.BugPhase
+	planFile         string
+	tasksFile        string
+	taskProgressFile string
+	mdRenderer       *glamour.TermRenderer
 }
 
 // NewBugPreview creates a new bug preview component
@@ -83,6 +86,9 @@ func (p BugPreview) getPlaceholderText() string {
 	case types.BugPhaseTasks, types.BugPhaseApproveTasks:
 		return "The task breakdown will appear here once the AI creates it..."
 	case types.BugPhaseImplement:
+		if p.taskProgressFile == "" {
+			return "Task progress will appear here once implementation begins..."
+		}
 		return "Implementation progress will appear here..."
 	default:
 		return "Bug fix artifacts will appear here..."
@@ -135,33 +141,87 @@ func (p *BugPreview) SetPhase(phase types.PreviewPhase) {
 	}
 }
 
-// SetFiles sets the file paths for plan and tasks
-func (p *BugPreview) SetFiles(planFile, tasksFile string) {
+// SetFiles sets the file paths for plan, tasks, and task progress
+func (p *BugPreview) SetFiles(planFile, tasksFile, taskProgressFile string) {
 	p.planFile = planFile
 	p.tasksFile = tasksFile
+	p.taskProgressFile = taskProgressFile
+}
+
+// getTaskProgressFilePath constructs the task progress file path for a given base directory
+func (p *BugPreview) getTaskProgressFilePath(baseDir string) string {
+	return filepath.Join(baseDir, "task-progress.md")
+}
+
+// validateFiles checks if the specified files exist and are accessible
+func (p *BugPreview) validateFiles() error {
+	files := []string{p.planFile, p.tasksFile, p.taskProgressFile}
+	for _, file := range files {
+		if file != "" {
+			if _, err := os.Stat(file); os.IsNotExist(err) {
+				// Log warning but don't fail - this is expected behavior
+				// Files may not exist yet during workflow progression
+				continue
+			} else if err != nil {
+				// Other file access error - log but continue gracefully
+				continue
+			}
+		}
+	}
+	return nil
 }
 
 // RefreshFromFiles reads content from the appropriate file based on phase
 func (p *BugPreview) RefreshFromFiles() {
 	var filePath string
+	var phaseDescription string
+
 	switch p.phase {
 	case types.BugPhasePlan, types.BugPhaseApprovePlan:
 		filePath = p.planFile
-	case types.BugPhaseTasks, types.BugPhaseApproveTasks, types.BugPhaseImplement:
+		phaseDescription = "plan"
+	case types.BugPhaseTasks, types.BugPhaseApproveTasks:
 		filePath = p.tasksFile
+		phaseDescription = "tasks"
+	case types.BugPhaseImplement:
+		filePath = p.taskProgressFile
+		phaseDescription = "task progress"
 	}
 
 	if filePath == "" {
+		// No file specified - show appropriate placeholder
+		p.SetContent("")
 		return
 	}
 
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return // File may not exist yet
+		if os.IsNotExist(err) {
+			// File doesn't exist yet - this is normal during workflow progression
+			p.SetContent("")
+			return
+		} else if os.IsPermission(err) {
+			// Permission denied - show user-friendly error
+			errorMsg := fmt.Sprintf("Unable to read %s file:\nPermission denied\n\nPlease check file permissions for:\n%s", phaseDescription, filePath)
+			p.SetContent(errorMsg)
+			return
+		} else {
+			// Other file access error - show generic error with details
+			errorMsg := fmt.Sprintf("Error reading %s file:\n%v\n\nFile: %s", phaseDescription, err, filePath)
+			p.SetContent(errorMsg)
+			return
+		}
 	}
 
-	// Strip YAML frontmatter if present
+	// Successfully read file - strip YAML frontmatter if present
 	cleanContent := stripBugFrontmatter(string(content))
+	if strings.TrimSpace(cleanContent) == "" {
+		// File is empty - show appropriate message
+		emptyMsg := fmt.Sprintf("The %s file is empty.\n\nImplementation is in progress...", phaseDescription)
+		p.SetContent(emptyMsg)
+		return
+	}
+
 	p.SetContent(cleanContent)
 }
 

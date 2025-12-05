@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -119,7 +121,10 @@ func convertBugPhaseToWorkflowPhase(bugPhase types.BugPhase) types.WorkflowPhase
 func NewBugModel(session *types.BugSession, eventBus *events.EventBus) BugModel {
 	bugPreview := components.NewBugPreview(80, 24)
 	bugPreview.SetPhase(session.CurrentPhase)
-	bugPreview.SetFiles(session.PlanFile, session.TasksFile)
+
+	// Construct task progress file path
+	taskProgressFile := filepath.Join(session.BugDir, "task-progress.md")
+	bugPreview.SetFiles(session.PlanFile, session.TasksFile, taskProgressFile)
 	previewWrapper := &bugPreviewWrapper{preview: &bugPreview}
 
 	// Create progress stepper
@@ -330,6 +335,19 @@ func (m BugModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case BugAgentErrorMsg:
 		return m, func() tea.Msg { return PhaseAgentErrorMsg{Err: msg.Err} }
 
+	case events.Event:
+		// Handle file update events for task-progress.md
+		if msg.Type == types.EventFileUpdated {
+			if payload, ok := msg.Payload.(events.FileUpdatedPayload); ok {
+				return m.handleTaskProgressFileUpdate(payload)
+			}
+		}
+
+	case TaskProgressRefreshMsg:
+		// Task progress file was updated - refresh the preview
+		m.refreshBugPreview()
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -494,6 +512,11 @@ func (m *BugModel) renderPhaseContent(contentHeight int) string {
 
 // refreshBugPreview updates the bug preview from files
 func (m *BugModel) refreshBugPreview() {
+	planFile := m.session.PlanFile
+	tasksFile := m.session.TasksFile
+	taskProgressFile := filepath.Join(m.session.BugDir, "task-progress.md")
+
+	m.bugPreview.SetFiles(planFile, tasksFile, taskProgressFile)
 	m.bugPreview.SetPhase(m.session.CurrentPhase)
 	m.bugPreview.RefreshFromFiles()
 }
@@ -678,6 +701,60 @@ func (m BugModel) goToPreviousPhase() (BugModel, tea.Cmd) {
 			to:   targetPhase,
 		}
 	}
+}
+
+// handleTaskProgressFileUpdate handles file update events for task-progress.md
+func (m BugModel) handleTaskProgressFileUpdate(payload events.FileUpdatedPayload) (tea.Model, tea.Cmd) {
+	// Check if the updated file is the task-progress.md file for this session
+	if m.session.BugDir == "" {
+		return m, nil
+	}
+
+	expectedProgressFile := filepath.Join(m.session.BugDir, "task-progress.md")
+
+	// Normalize paths for comparison
+	updateFile := filepath.Clean(payload.Path)
+	expectedFile := filepath.Clean(expectedProgressFile)
+
+	if updateFile == expectedFile {
+		// The task progress file was updated, refresh the preview
+		go func() {
+			// Add retry mechanism for file access with exponential backoff
+			maxRetries := 5
+			baseDelay := 50 * time.Millisecond
+
+			for attempt := 0; attempt < maxRetries; attempt++ {
+				// Calculate delay with exponential backoff
+				delay := time.Duration(attempt) * baseDelay
+				if delay > 0 {
+					time.Sleep(delay)
+				}
+
+				// Check if file is accessible before refreshing
+				if _, err := os.Stat(expectedFile); err == nil {
+					// File is accessible, refresh the preview
+					m.refreshBugPreview()
+					return // Success - break out of retry loop
+				} else if os.IsNotExist(err) {
+					// File was deleted, refresh with empty content
+					m.refreshBugPreview()
+					return
+				} else if attempt == maxRetries-1 {
+					// Final attempt failed due to access error
+					// RefreshFromFiles() will handle the error gracefully
+					m.refreshBugPreview()
+					return
+				}
+				// Continue retrying for other errors
+			}
+		}()
+
+		return m, func() tea.Msg {
+			return TaskProgressRefreshMsg{Operation: payload.Operation}
+		}
+	}
+
+	return m, nil
 }
 
 // Message types for phase transitions

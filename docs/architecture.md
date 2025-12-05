@@ -233,8 +233,53 @@ Collab is a production-ready Go CLI tool that orchestrates collaboration between
 - `tui/model.go` - Bubbletea Model with session state
 - `tui/update.go` - Update function handling events and keyboard
 - `tui/view.go` - View rendering with Lipgloss
-- `tui/components/` - Reusable components (header, turn_list, file_viewer, status_bar)
+- `tui/components/` - Reusable components (header, turn_list, file_viewer, status_bar, bug_preview)
 - `tui/styles.go` - Lipgloss style definitions
+
+#### Bug Workflow TUI
+
+**Responsibility**: Interactive UI for systematic bug fixing with AI assistance.
+
+**Architecture**: Built on the same Bubbletea foundation as the collaboration TUI but optimized for single-agent bug fixing workflow.
+
+**Key Components**:
+
+- `BugModel` (`tui/bug_model.go`) - Main model for bug fixing workflow
+- `BugPreview` (`tui/components/bug_preview.go`) - Preview component for bug artifacts
+
+**Bug Workflow Phases**:
+1. **Plan Phase**: AI analyzes the bug and creates a fix plan (`bug-plan.md`)
+2. **Tasks Phase**: AI breaks down the plan into actionable tasks (`bug-tasks.md`)
+3. **Implement Phase**: AI executes tasks and tracks progress (`task-progress.md`)
+
+**Preview Pane Features**:
+- Real-time file watching for task progress updates
+- Phase-specific content display (plan → tasks → implementation progress)
+- Graceful error handling for missing or inaccessible files
+- YAML frontmatter stripping for clean markdown display
+
+**File Watching**:
+- Monitors `task-progress.md` during implement phase
+- Exponential backoff retry mechanism for file access
+- Handles file permission and access errors gracefully
+
+**Troubleshooting Preview Pane Issues**:
+
+*Problem: Preview pane shows "Permission denied" error*
+- **Cause**: Insufficient file permissions for bug directory or files
+- **Solution**: Check and fix file permissions: `chmod 644 /path/to/bug-files/*.md`
+
+*Problem: Preview pane is empty during implement phase*
+- **Cause**: `task-progress.md` file has not been created yet by the AI agent
+- **Solution**: This is normal behavior; file will appear when implementation begins
+
+*Problem: Preview pane not updating in real-time*
+- **Cause**: File watching system may have encountered an error
+- **Solution**: Try switching to a different phase and back, or restart the bug workflow
+
+*Problem: Preview shows "file is empty" message*
+- **Cause**: Markdown file exists but has no content
+- **Solution**: Wait for AI agent to write content, or check if file was corrupted
 
 ### 8. Configuration (`internal/config/`)
 
