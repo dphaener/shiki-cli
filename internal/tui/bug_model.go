@@ -149,9 +149,10 @@ func NewBugModel(session *types.BugSession, eventBus *events.EventBus) BugModel 
 
 	// Create the phase model config
 	config := PhaseModelConfig{
-		PhaseType:    PhaseBug,
-		Title:        fmt.Sprintf("Collab Bug Fix: %s", session.Title),
-		PreviewTitle: "Bug Fix Preview",
+		PhaseType:          PhaseBug,
+		Title:              fmt.Sprintf("Collab Bug Fix: %s", session.Title),
+		PreviewTitle:       "Bug Fix Preview",
+		OutputTemplateName: model.getOutputTemplateName(),
 		SubtitleFunc: func() string {
 			return fmt.Sprintf("Bug #%s - Phase: %s",
 				session.ID[:8],
@@ -257,6 +258,9 @@ func (m *BugModel) reinitializeAgent() tea.Cmd {
 
 // Init implements tea.Model
 func (m BugModel) Init() tea.Cmd {
+	// Load template content FIRST
+	m.loadBugTemplateContent()
+
 	return tea.Batch(
 		tea.EnterAltScreen,
 		m.PhaseModel.Init(),
@@ -286,6 +290,9 @@ func (m BugModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update session state
 		m.session.CurrentPhase = msg.to
 		m.session.UpdatedAt = time.Now()
+
+		// Load new template for the phase
+		m.loadBugTemplateContent()
 
 		// Initialize the new phase (including approval view if needed)
 		initCmd := m.initializeBugPhase()
@@ -545,6 +552,59 @@ func (m *BugModel) appendToChatHistory(msg types.ChatMessage) {
 		m.session.ImplementChatHistory = append(m.session.ImplementChatHistory, msg)
 	default:
 		m.session.PlanChatHistory = append(m.session.PlanChatHistory, msg)
+	}
+}
+
+// getOutputTemplateName returns the template name for the current phase
+func (m *BugModel) getOutputTemplateName() string {
+	switch m.session.CurrentPhase {
+	case types.BugPhasePlan:
+		return "plan"
+	case types.BugPhaseTasks:
+		return "tasks"
+	case types.BugPhaseImplement:
+		return "task-progress"
+	default:
+		return ""
+	}
+}
+
+// loadBugTemplateContent loads the appropriate template for the current phase
+func (m *BugModel) loadBugTemplateContent() {
+	switch m.session.CurrentPhase {
+	case types.BugPhasePlan:
+		m.loadBugPlanTemplateContent()
+	case types.BugPhaseTasks:
+		m.loadBugTasksTemplateContent()
+	case types.BugPhaseImplement:
+		m.loadBugImplementTemplateContent()
+	}
+}
+
+// loadBugPlanTemplateContent loads the plan template and sets it to preview
+func (m *BugModel) loadBugPlanTemplateContent() {
+	// Update the config template name and reload
+	m.PhaseModel.config.OutputTemplateName = "plan"
+	if templateContent := m.PhaseModel.loadOutputTemplate(); templateContent != "" {
+		m.bugPreview.SetContent(templateContent)
+	}
+}
+
+// loadBugTasksTemplateContent loads the tasks template and sets it to preview
+func (m *BugModel) loadBugTasksTemplateContent() {
+	// Update the config template name and reload
+	m.PhaseModel.config.OutputTemplateName = "tasks"
+	if templateContent := m.PhaseModel.loadOutputTemplate(); templateContent != "" {
+		m.bugPreview.SetContent(templateContent)
+	}
+}
+
+// loadBugImplementTemplateContent loads the task-progress template and sets it to preview
+func (m *BugModel) loadBugImplementTemplateContent() {
+	// Update the config template name and reload
+	m.PhaseModel.config.OutputTemplateName = "task-progress"
+	if templateContent := m.PhaseModel.loadOutputTemplate(); templateContent != "" {
+		m.bugPreview.SetContent(templateContent)
 	}
 }
 
