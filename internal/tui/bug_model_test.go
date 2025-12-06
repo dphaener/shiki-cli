@@ -52,13 +52,14 @@ func TestBugModel_HandleTaskProgressFileUpdate(t *testing.T) {
 
 	// Create test session
 	session := &types.BugSession{
-		ID:           "test-bug-002",
-		Title:        "Test Bug",
-		Description:  "Test bug description",
-		CurrentPhase: types.BugPhaseImplement,
-		BugDir:       tempDir,
-		PlanFile:     filepath.Join(tempDir, "bug-plan.md"),
-		TasksFile:    filepath.Join(tempDir, "bug-tasks.md"),
+		ID:              "test-bug-002",
+		Title:           "Test Bug",
+		Description:     "Test bug description",
+		CurrentPhase:    types.BugPhaseImplement,
+		BugDir:          tempDir,
+		PlanFile:        filepath.Join(tempDir, "bug-plan.md"),
+		TasksFile:       filepath.Join(tempDir, "bug-tasks.md"),
+		BugProgressFile: filepath.Join(tempDir, "task-progress.md"),
 	}
 
 	// Create event bus
@@ -248,13 +249,14 @@ func TestBugModel_FilePathNormalization(t *testing.T) {
 
 	// Create test session
 	session := &types.BugSession{
-		ID:           "test-bug-006",
-		Title:        "Test Bug",
-		Description:  "Test bug description",
-		CurrentPhase: types.BugPhaseImplement,
-		BugDir:       tempDir,
-		PlanFile:     filepath.Join(tempDir, "bug-plan.md"),
-		TasksFile:    filepath.Join(tempDir, "bug-tasks.md"),
+		ID:              "test-bug-006",
+		Title:           "Test Bug",
+		Description:     "Test bug description",
+		CurrentPhase:    types.BugPhaseImplement,
+		BugDir:          tempDir,
+		PlanFile:        filepath.Join(tempDir, "bug-plan.md"),
+		TasksFile:       filepath.Join(tempDir, "bug-tasks.md"),
+		BugProgressFile: filepath.Join(tempDir, "task-progress.md"),
 	}
 
 	// Create event bus

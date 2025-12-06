@@ -95,22 +95,24 @@ func startNewWorkflow(featureName string) error {
 
 	// Create workflow session
 	session := &types.WorkflowSession{
-		ID:            fmt.Sprintf("workflow-%d-%s", time.Now().Unix(), result.Slug),
-		CurrentPhase:  types.WorkflowPhaseSpecify,
-		FeatureNumber: result.FeatureNumber,
-		Slug:          result.Slug,
-		FriendlyName:  finalFeatureName,
-		FeatureDesc:   finalFeatureName, // Now contains the feature name instead of description
-		SpecFile:      result.SpecFile,
-		PlanFile:      result.PlanFile,
-		TasksFile:     result.TasksFile,
-		FeatureDir:    result.FeatureDir,
-		ChecklistDir:  result.ChecklistDir,
-		ContractsDir:  result.ContractsDir,
-		Checkpoints:   make(map[types.WorkflowPhase]*types.PhaseCheckpoint),
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
-		Status:        types.SessionRunning,
+		ID:               fmt.Sprintf("workflow-%d-%s", time.Now().Unix(), result.Slug),
+		CurrentPhase:     types.WorkflowPhaseSpecify,
+		FeatureNumber:    result.FeatureNumber,
+		Slug:             result.Slug,
+		FriendlyName:     finalFeatureName,
+		FeatureDesc:      finalFeatureName, // Now contains the feature name instead of description
+		SpecFile:         result.SpecFile,
+		PlanFile:         result.PlanFile,
+		TasksFile:        result.TasksFile,
+		TaskProgressFile: result.TaskProgressFile,
+		BugProgressFile:  result.BugProgressFile,
+		FeatureDir:       result.FeatureDir,
+		ChecklistDir:     result.ChecklistDir,
+		ContractsDir:     result.ContractsDir,
+		Checkpoints:      make(map[types.WorkflowPhase]*types.PhaseCheckpoint),
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+		Status:           types.SessionRunning,
 	}
 
 	// Save initial workflow state

@@ -169,6 +169,7 @@ func LoadBugSession(bugID string) (*types.BugSession, error) {
 	bugDir := GetBugDir(bugID)
 	planFile := GetBugPlanPath(bugID)
 	tasksFile := GetBugTasksPath(bugID)
+	bugProgressFile := filepath.Join(bugDir, "task-progress.md")
 
 	// Load current content if files exist
 	var currentPlan, currentTasks string
@@ -180,19 +181,20 @@ func LoadBugSession(bugID string) (*types.BugSession, error) {
 	}
 
 	session := &types.BugSession{
-		ID:           meta.SessionID,
-		Title:        meta.Title,
-		Description:  meta.Description,
-		CurrentPhase: meta.CurrentPhase,
-		PlanFile:     planFile,
-		TasksFile:    tasksFile,
-		BugDir:       bugDir,
-		Checkpoints:  meta.Checkpoints,
-		CurrentPlan:  currentPlan,
-		CurrentTasks: currentTasks,
-		CreatedAt:    meta.CreatedAt,
-		UpdatedAt:    meta.UpdatedAt,
-		Status:       types.SessionStatus(meta.Status),
+		ID:              meta.SessionID,
+		Title:           meta.Title,
+		Description:     meta.Description,
+		CurrentPhase:    meta.CurrentPhase,
+		PlanFile:        planFile,
+		TasksFile:       tasksFile,
+		BugProgressFile: bugProgressFile,
+		BugDir:          bugDir,
+		Checkpoints:     meta.Checkpoints,
+		CurrentPlan:     currentPlan,
+		CurrentTasks:    currentTasks,
+		CreatedAt:       meta.CreatedAt,
+		UpdatedAt:       meta.UpdatedAt,
+		Status:          types.SessionStatus(meta.Status),
 	}
 
 	return session, nil

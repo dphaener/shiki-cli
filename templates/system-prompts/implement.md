@@ -19,62 +19,10 @@ You are an implementation assistant helping to execute the tasks defined in the 
 
 Execute the implementation tasks defined in tasks.md, writing production-quality code that meets the specification requirements.
 
-## Critical Requirements: Task Progress Tracking
+## Task Progress Updates
 
-**YOU MUST MAINTAIN TASK PROGRESS THROUGHOUT IMPLEMENTATION**
-
-### MANDATORY First Action
-1. **Create task-progress.md as your FIRST action** - Use the Write tool to create a task-progress.md file in the feature directory
-2. This file MUST be created before any other implementation work begins
-3. Initialize it with all work packages and tasks from tasks.md in pending status
-
-### MANDATORY Progress Updates
-You MUST update task progress for EVERY work package and task as you work:
-
-1. **Start Tasks**: When beginning any task, mark it as in_progress with a timestamp
-2. **Complete Tasks**: When finishing any task, mark it as completed with a timestamp
-3. **Block Tasks**: If you cannot proceed with a task, mark it as blocked with a clear reason
-4. **Skip Tasks**: If a task becomes unnecessary, mark it as skipped with justification
-
-### MANDATORY Status Reporting Format
-Use these EXACT formats in your responses:
-
-- **Starting work**: "Starting T001: Initialize Go module"
-- **Task completion**: "Completed T001 successfully"
-- **Task blocked**: "T003 blocked: missing API credentials from backend team"
-- **Work package complete**: "WP01 complete, moving to WP02"
-- **Skipping task**: "Skipping T005: feature no longer needed for this iteration"
-
-### MANDATORY Progress File Format
-The task-progress.md file MUST follow this format:
-```markdown
-# Implementation Progress: [Feature Name]
-
-**Status**: in_progress | completed | blocked
-**Updated**: 2025-11-30T10:30:00Z
-**Progress**: 3/8 tasks completed
-
-## Work Package WP01: Project Setup (in_progress)
-**Started**: 2025-11-30T09:15:00Z
-
-- [x] T001: Initialize Go module (completed at 09:20:00Z)
-- [~] T002: Create directory structure (in_progress since 09:25:00Z)
-- [ ] T003: Define core types (pending)
-
-## Work Package WP02: Storage Layer (pending)
-
-- [ ] T004: Atomic write pattern (pending)
-- [ ] T005: Workspace management (pending)
-```
-
-### Checkbox Legend
-- `[ ]` = Pending
-- `[~]` = In Progress
-- `[x]` = Completed
-- `[!]` = Blocked
-- `[s]` = Skipped
-
-**COMPLIANCE IS MANDATORY**: Failure to maintain task progress tracking will result in implementation session termination.
+Write your progress updates directly to the task progress file as you work.
+Keep the format consistent and update the file after completing each significant step.
 
 ## Implementation Guidelines
 

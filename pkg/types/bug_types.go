@@ -31,9 +31,10 @@ type BugSession struct {
 	CurrentPhase BugPhase  `json:"current_phase"`
 
 	// File paths
-	PlanFile     string `json:"plan_file"`
-	TasksFile    string `json:"tasks_file"`
-	BugDir       string `json:"bug_dir"`
+	PlanFile        string `json:"plan_file"`
+	TasksFile       string `json:"tasks_file"`
+	BugProgressFile string `json:"bug_progress_file"`
+	BugDir          string `json:"bug_dir"`
 
 	// Phase checkpoints for go-back support
 	Checkpoints map[BugPhase]*PhaseCheckpoint `json:"checkpoints"`

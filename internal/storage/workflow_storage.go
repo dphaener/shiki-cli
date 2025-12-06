@@ -13,14 +13,16 @@ import (
 
 // WorkflowSetupResult contains the result of workflow setup
 type WorkflowSetupResult struct {
-	FeatureNumber int
-	Slug          string
-	FeatureDir    string
-	SpecFile      string
-	PlanFile      string
-	TasksFile     string
-	ChecklistDir  string
-	ContractsDir  string
+	FeatureNumber    int
+	Slug             string
+	FeatureDir       string
+	SpecFile         string
+	PlanFile         string
+	TasksFile        string
+	TaskProgressFile string
+	BugProgressFile  string
+	ChecklistDir     string
+	ContractsDir     string
 }
 
 // WorkflowMeta represents workflow state stored in workflow.json
@@ -61,6 +63,8 @@ func SetupWorkflowSession(cfg FeatureSetupConfig) (*WorkflowSetupResult, error) 
 	specDir := featureResult.FeatureDir
 	planFile := filepath.Join(specDir, "plan.md")
 	tasksFile := filepath.Join(specDir, "tasks.md")
+	taskProgressFile := filepath.Join(specDir, "task-progress.md")
+	bugProgressFile := filepath.Join(specDir, "bug-progress.md")
 	contractsDir := filepath.Join(specDir, "contracts")
 
 	// Create contracts directory
@@ -69,14 +73,16 @@ func SetupWorkflowSession(cfg FeatureSetupConfig) (*WorkflowSetupResult, error) 
 	}
 
 	return &WorkflowSetupResult{
-		FeatureNumber: featureResult.FeatureNumber,
-		Slug:          featureResult.Slug,
-		FeatureDir:    featureResult.FeatureDir,
-		SpecFile:      featureResult.SpecFile,
-		PlanFile:      planFile,
-		TasksFile:     tasksFile,
-		ChecklistDir:  featureResult.ChecklistDir,
-		ContractsDir:  contractsDir,
+		FeatureNumber:    featureResult.FeatureNumber,
+		Slug:             featureResult.Slug,
+		FeatureDir:       featureResult.FeatureDir,
+		SpecFile:         featureResult.SpecFile,
+		PlanFile:         planFile,
+		TasksFile:        tasksFile,
+		TaskProgressFile: taskProgressFile,
+		BugProgressFile:  bugProgressFile,
+		ChecklistDir:     featureResult.ChecklistDir,
+		ContractsDir:     contractsDir,
 	}, nil
 }
 
@@ -140,6 +146,8 @@ func LoadWorkflowSession(slug string) (*types.WorkflowSession, error) {
 	specFile := filepath.Join(specDir, "spec.md")
 	planFile := filepath.Join(specDir, "plan.md")
 	tasksFile := filepath.Join(specDir, "tasks.md")
+	taskProgressFile := filepath.Join(specDir, "task-progress.md")
+	bugProgressFile := filepath.Join(specDir, "bug-progress.md")
 	checklistDir := filepath.Join(specDir, "checklists")
 	contractsDir := filepath.Join(specDir, "contracts")
 
@@ -156,25 +164,27 @@ func LoadWorkflowSession(slug string) (*types.WorkflowSession, error) {
 	}
 
 	session := &types.WorkflowSession{
-		ID:            meta.SessionID,
-		CurrentPhase:  meta.CurrentPhase,
-		FeatureNumber: spec.Number,
-		Slug:          spec.Slug,
-		FriendlyName:  spec.FeatureName,
-		FeatureDesc:   spec.FeatureName,
-		SpecFile:      specFile,
-		PlanFile:      planFile,
-		TasksFile:     tasksFile,
-		FeatureDir:    specDir,
-		ChecklistDir:  checklistDir,
-		ContractsDir:  contractsDir,
-		Checkpoints:   meta.Checkpoints,
-		CurrentSpec:   currentSpec,
-		CurrentPlan:   currentPlan,
-		CurrentTasks:  currentTasks,
-		CreatedAt:     meta.CreatedAt,
-		UpdatedAt:     meta.UpdatedAt,
-		Status:        types.SessionStatus(meta.Status),
+		ID:               meta.SessionID,
+		CurrentPhase:     meta.CurrentPhase,
+		FeatureNumber:    spec.Number,
+		Slug:             spec.Slug,
+		FriendlyName:     spec.FeatureName,
+		FeatureDesc:      spec.FeatureName,
+		SpecFile:         specFile,
+		PlanFile:         planFile,
+		TasksFile:        tasksFile,
+		TaskProgressFile: taskProgressFile,
+		BugProgressFile:  bugProgressFile,
+		FeatureDir:       specDir,
+		ChecklistDir:     checklistDir,
+		ContractsDir:     contractsDir,
+		Checkpoints:      meta.Checkpoints,
+		CurrentSpec:      currentSpec,
+		CurrentPlan:      currentPlan,
+		CurrentTasks:     currentTasks,
+		CreatedAt:        meta.CreatedAt,
+		UpdatedAt:        meta.UpdatedAt,
+		Status:           types.SessionStatus(meta.Status),
 	}
 
 	return session, nil

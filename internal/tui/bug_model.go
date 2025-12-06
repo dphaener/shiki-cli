@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -514,9 +513,9 @@ func (m *BugModel) renderPhaseContent(contentHeight int) string {
 func (m *BugModel) refreshBugPreview() {
 	planFile := m.session.PlanFile
 	tasksFile := m.session.TasksFile
-	taskProgressFile := filepath.Join(m.session.BugDir, "task-progress.md")
+	bugProgressFile := m.session.BugProgressFile
 
-	m.bugPreview.SetFiles(planFile, tasksFile, taskProgressFile)
+	m.bugPreview.SetFiles(planFile, tasksFile, bugProgressFile)
 	m.bugPreview.SetPhase(m.session.CurrentPhase)
 	m.bugPreview.RefreshFromFiles()
 }
@@ -706,48 +705,17 @@ func (m BugModel) goToPreviousPhase() (BugModel, tea.Cmd) {
 // handleTaskProgressFileUpdate handles file update events for task-progress.md
 func (m BugModel) handleTaskProgressFileUpdate(payload events.FileUpdatedPayload) (tea.Model, tea.Cmd) {
 	// Check if the updated file is the task-progress.md file for this session
-	if m.session.BugDir == "" {
+	if m.session.BugProgressFile == "" {
 		return m, nil
 	}
 
-	expectedProgressFile := filepath.Join(m.session.BugDir, "task-progress.md")
-
 	// Normalize paths for comparison
 	updateFile := filepath.Clean(payload.Path)
-	expectedFile := filepath.Clean(expectedProgressFile)
+	expectedFile := filepath.Clean(m.session.BugProgressFile)
 
 	if updateFile == expectedFile {
 		// The task progress file was updated, refresh the preview
-		go func() {
-			// Add retry mechanism for file access with exponential backoff
-			maxRetries := 5
-			baseDelay := 50 * time.Millisecond
-
-			for attempt := 0; attempt < maxRetries; attempt++ {
-				// Calculate delay with exponential backoff
-				delay := time.Duration(attempt) * baseDelay
-				if delay > 0 {
-					time.Sleep(delay)
-				}
-
-				// Check if file is accessible before refreshing
-				if _, err := os.Stat(expectedFile); err == nil {
-					// File is accessible, refresh the preview
-					m.refreshBugPreview()
-					return // Success - break out of retry loop
-				} else if os.IsNotExist(err) {
-					// File was deleted, refresh with empty content
-					m.refreshBugPreview()
-					return
-				} else if attempt == maxRetries-1 {
-					// Final attempt failed due to access error
-					// RefreshFromFiles() will handle the error gracefully
-					m.refreshBugPreview()
-					return
-				}
-				// Continue retrying for other errors
-			}
-		}()
+		m.refreshBugPreview()
 
 		return m, func() tea.Msg {
 			return TaskProgressRefreshMsg{Operation: payload.Operation}

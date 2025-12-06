@@ -43,12 +43,14 @@ type WorkflowSession struct {
 	FeatureDesc   string        `json:"feature_desc"`
 
 	// File paths
-	SpecFile     string `json:"spec_file"`
-	PlanFile     string `json:"plan_file"`
-	TasksFile    string `json:"tasks_file"`
-	FeatureDir   string `json:"feature_dir"`
-	ChecklistDir string `json:"checklist_dir"`
-	ContractsDir string `json:"contracts_dir"`
+	SpecFile         string `json:"spec_file"`
+	PlanFile         string `json:"plan_file"`
+	TasksFile        string `json:"tasks_file"`
+	TaskProgressFile string `json:"task_progress_file"`  // Add this new field for feature mode
+	BugProgressFile  string `json:"bug_progress_file"`   // Add this new field for bug mode
+	FeatureDir       string `json:"feature_dir"`
+	ChecklistDir     string `json:"checklist_dir"`
+	ContractsDir     string `json:"contracts_dir"`
 
 	// Phase checkpoints for go-back support
 	Checkpoints map[WorkflowPhase]*PhaseCheckpoint `json:"checkpoints"`
