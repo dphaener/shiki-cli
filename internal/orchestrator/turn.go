@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dphaener/shiki-cli/internal/events"
+	"github.com/dphaener/shiki-cli/internal/templates"
 	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
@@ -64,7 +65,7 @@ func (o *Orchestrator) ExecuteTurn(ctx context.Context, agentCfg *types.Agent) (
 }
 
 // buildQuery constructs the query/prompt for an agent's turn
-// It injects all collaboration context directly into the prompt
+// It uses TemplateProcessor to load the collaboration template with dynamic context
 func (o *Orchestrator) buildQuery(agentCfg *types.Agent) string {
 	// Read all context for injection
 	task, _ := o.ReadTask()
@@ -75,64 +76,17 @@ func (o *Orchestrator) buildQuery(agentCfg *types.Agent) string {
 
 	turnNumber := o.session.CurrentTurn + 1
 
-	query := fmt.Sprintf(`You are %s, a %s.
+	// Use TemplateProcessor for collaboration system prompt
+	processor := templates.NewTemplateProcessor("templates")
+	context := templates.NewPhaseContext().
+		WithCollaborationData(agentCfg.Name, agentCfg.Role, agentCfg.ID, partnerName, turnNumber, o.session.MaxTurns, task, messages, sharedContext, memory)
 
-This is turn %d of %d. You are collaborating with %s.
-
-=== TASK ===
-%s
-
-=== MESSAGES FROM YOUR PARTNER ===
-%s
-
-=== SHARED CONTEXT ===
-%s
-
-=== YOUR PRIVATE MEMORY ===
-%s
-
-=== INSTRUCTIONS ===
-You have built-in tools (Read, Write, Edit, Glob, Grep, Bash) to work with files in your workspace.
-
-**File-Based Communication Protocol:**
-
-To send a message to your partner:
-  Use Write tool to create: messages/%s_turn_%02d.md
-  (Your partner will see it on their next turn)
-
-To update shared context (both agents can see):
-  Use Write tool to update: shared_context.md
-
-To update your private memory:
-  Use Write tool to update: memory/%s_memory.md
-
-To submit your final deliverable:
-  Use Write tool to create: %s_deliverable.md
-  (Session completes when BOTH agents submit matching deliverables)
-
-**On your turn:**
-1. Review the task, messages, shared context, and your memory (shown above)
-2. Perform your role's responsibilities
-3. Send a message to your partner if needed (write to messages/ directory)
-4. Update shared context if you have findings to share
-5. Update your memory to track your progress
-6. When the task is complete, submit your deliverable
-
-Begin your turn.`,
-		agentCfg.Name,
-		agentCfg.Role,
-		turnNumber,
-		o.session.MaxTurns,
-		partnerName,
-		task,
-		messages,
-		sharedContext,
-		memory,
-		agentCfg.ID,
-		turnNumber,
-		agentCfg.ID,
-		agentCfg.ID,
-	)
+	// Load and process the collaboration template
+	query, err := processor.LoadSystemPrompt("collaboration", context)
+	if err != nil {
+		// Fallback to minimal prompt if template loading fails
+		return fmt.Sprintf("You are %s, a %s. This is turn %d of %d. Work on the assigned task and collaborate with your partner.", agentCfg.Name, agentCfg.Role, turnNumber, o.session.MaxTurns)
+	}
 
 	return query
 }

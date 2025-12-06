@@ -3,7 +3,7 @@ package agent
 import (
 	"fmt"
 
-	"github.com/dphaener/shiki-cli/internal/prompts"
+	"github.com/dphaener/shiki-cli/internal/templates"
 	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
@@ -24,16 +24,16 @@ func NewPlanAgent(session *types.PlanSession) *types.Agent {
 
 // buildPlanSystemPrompt creates the system prompt for planning workflow
 func buildPlanSystemPrompt(session *types.PlanSession) string {
-	prompt, err := prompts.LoadPlanPrompt(prompts.PlanPromptData{
-		FriendlyName:  session.FriendlyName,
-		FeatureNumber: session.FeatureNumber,
-		SpecSlug:      session.SpecSlug,
-		Phase:         string(session.Phase),
-		SpecFile:      session.SpecFile,
-		PlanFile:      session.PlanFile,
-		ContractsDir:  session.ContractsDir,
-		SpecDir:       session.SpecDir,
-	})
+	// Create template processor
+	processor := templates.NewTemplateProcessor("templates")
+
+	// Create unified phase context
+	context := templates.NewPhaseContext().
+		WithCore(session.FriendlyName, session.FeatureNumber, session.SpecSlug, string(session.Phase)).
+		WithPaths(session.SpecFile, session.PlanFile, "", session.SpecDir, session.ContractsDir, "", "", "")
+
+	// Load and process the system prompt template
+	prompt, err := processor.LoadSystemPrompt("plan", context)
 	if err != nil {
 		// Fallback to minimal prompt
 		return fmt.Sprintf("Help create an implementation plan for: %s", session.FriendlyName)

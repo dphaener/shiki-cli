@@ -3,7 +3,7 @@ package agent
 import (
 	"fmt"
 
-	"github.com/dphaener/shiki-cli/internal/prompts"
+	"github.com/dphaener/shiki-cli/internal/templates"
 	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
@@ -24,15 +24,17 @@ func NewBugAgent(session *types.BugSession) *types.Agent {
 
 // buildBugSystemPrompt creates the system prompt for bug fix workflow
 func buildBugSystemPrompt(session *types.BugSession) string {
-	prompt, err := prompts.LoadBugPrompt(prompts.BugPromptData{
-		Title:       session.Title,
-		Description: session.Description,
-		Phase:       string(session.CurrentPhase),
-		BugID:       session.ID,
-		BugDir:      session.BugDir,
-		PlanFile:    session.PlanFile,
-		TasksFile:   session.TasksFile,
-	})
+	// Create template processor
+	processor := templates.NewTemplateProcessor("templates")
+
+	// Create unified phase context
+	context := templates.NewPhaseContext().
+		WithCore("", 0, "", string(session.CurrentPhase)).
+		WithPaths("", session.PlanFile, session.TasksFile, "", "", "", "", session.BugDir).
+		WithBugData(session.ID, session.Title, session.Description)
+
+	// Load and process the system prompt template
+	prompt, err := processor.LoadSystemPrompt("bug", context)
 	if err != nil {
 		// Fallback to minimal prompt
 		return fmt.Sprintf(`# Bug Fix Assistant

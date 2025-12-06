@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dphaener/shiki-cli/internal/events"
 	"github.com/dphaener/shiki-cli/internal/orchestrator"
+	"github.com/dphaener/shiki-cli/internal/templates"
 	"github.com/dphaener/shiki-cli/internal/tui/components"
 	"github.com/dphaener/shiki-cli/pkg/types"
 )
@@ -89,13 +90,18 @@ func NewTasksModel(session *types.WorkflowSession, eventBus *events.EventBus) Ta
 		RefreshPreviewFunc: func() {
 			model.refreshTasksPreviewFromFile()
 		},
+		OnToolUseFunc: func(toolName string, args map[string]interface{}) {
+			// Refresh preview after tool use - agent may have written tasks
+			model.refreshTasksPreviewFromFile()
+		},
 		GetChatHistoryFunc: func() []types.ChatMessage {
 			return session.TasksChatHistory
 		},
 		AppendChatHistoryFunc: func(msg types.ChatMessage) {
 			session.TasksChatHistory = append(session.TasksChatHistory, msg)
 		},
-		LoadingStateLabel: "tasks",
+		LoadingStateLabel:  "tasks",
+		OutputTemplateName: "tasks",
 	}
 
 	// Create the PhaseModel
@@ -106,6 +112,9 @@ func NewTasksModel(session *types.WorkflowSession, eventBus *events.EventBus) Ta
 
 // Init implements tea.Model
 func (m TasksModel) Init() tea.Cmd {
+	// Load template content with proper context
+	m.loadTasksTemplateContent()
+
 	return tea.Batch(
 		m.PhaseModel.Init(),
 		initializeTasksAgent(m.session, m.PhaseModel.eventBus),
@@ -257,3 +266,18 @@ const (
 	TasksChatPane    TasksPaneType = ChatPane
 	TasksPreviewPane TasksPaneType = PreviewPane
 )
+
+// loadTasksTemplateContent loads the tasks output template with proper session context
+func (m *TasksModel) loadTasksTemplateContent() {
+	// Create context with session data for template variables
+	context := templates.NewPhaseContext().
+		WithCore(m.session.FriendlyName, m.session.FeatureNumber, m.session.Slug, string(m.session.CurrentPhase)).
+		WithPaths(m.session.SpecFile, m.session.PlanFile, m.session.TasksFile, "", "", "", "", "")
+
+	// Load template content with context
+	templateContent := m.PhaseModel.LoadOutputTemplateWithContext(context)
+	if templateContent != "" {
+		// Set template content in preview
+		m.tasksPreview.SetContent(templateContent)
+	}
+}

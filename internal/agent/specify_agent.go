@@ -3,7 +3,7 @@ package agent
 import (
 	"fmt"
 
-	"github.com/dphaener/shiki-cli/internal/prompts"
+	"github.com/dphaener/shiki-cli/internal/templates"
 	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
@@ -24,17 +24,17 @@ func NewSpecifyAgent(session *types.SpecifySession) *types.Agent {
 
 // buildSpecifySystemPrompt creates the system prompt for specification workflow
 func buildSpecifySystemPrompt(session *types.SpecifySession) string {
-	prompt, err := prompts.LoadSpecifyPrompt(prompts.SpecifyPromptData{
-		FriendlyName:   session.FriendlyName,
-		FeatureNumber:  session.FeatureNumber,
-		Slug:           session.Slug,
-		Phase:          string(session.Phase),
-		HasDescription: session.FeatureDesc != "",
-		FeatureDesc:    session.FeatureDesc,
-		SpecFile:       session.SpecFile,
-		SpecDir:        session.SpecDir,
-		ChecklistDir:   session.ChecklistDir,
-	})
+	// Create template processor
+	processor := templates.NewTemplateProcessor("templates")
+
+	// Create unified phase context
+	context := templates.NewPhaseContext().
+		WithCore(session.FriendlyName, session.FeatureNumber, session.Slug, string(session.Phase)).
+		WithPaths(session.SpecFile, "", "", session.SpecDir, "", session.ChecklistDir, "", "").
+		WithSpecifyData(session.FeatureDesc != "", session.FeatureDesc)
+
+	// Load and process the system prompt template
+	prompt, err := processor.LoadSystemPrompt("specify", context)
 	if err != nil {
 		// Fallback to minimal prompt
 		return fmt.Sprintf("Help create a specification for: %s", session.FriendlyName)
