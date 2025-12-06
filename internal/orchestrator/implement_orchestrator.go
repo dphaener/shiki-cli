@@ -68,11 +68,11 @@ func (o *ImplementOrchestrator) Initialize() error {
 	// Setup task progress tracking after agent initialization
 	if err := o.setupTaskProgressTracking(); err != nil {
 		// Log error but don't fail initialization - task progress is optional
-		fmt.Printf("Warning: Failed to setup task progress tracking for session %s: %v\n", o.sessionID, err)
-		fmt.Printf("Implementation will continue without task progress tracking.\n")
+		o.logger.log("Warning: Failed to setup task progress tracking for session %s: %v", o.sessionID, err)
+		o.logger.log("Implementation will continue without task progress tracking")
 		o.taskProgressEnabled = false
 	} else if o.taskProgressEnabled {
-		fmt.Printf("Task progress tracking enabled for session %s\n", o.sessionID)
+		o.logger.log("Task progress tracking enabled for session %s", o.sessionID)
 	}
 
 	return nil
@@ -130,7 +130,7 @@ func (o *ImplementOrchestrator) setupTaskProgressTracking() error {
 	// Create initial progress file if it doesn't exist
 	if !o.fileManager.Exists() {
 		progressFilePath := o.fileManager.GetFilePath()
-		fmt.Printf("Creating initial task progress file: %s\n", progressFilePath)
+		o.logger.log("Creating initial task progress file: %s", progressFilePath)
 
 		// Ensure the directory exists
 		if err := os.MkdirAll(filepath.Dir(progressFilePath), 0755); err != nil {
@@ -166,14 +166,14 @@ func (o *ImplementOrchestrator) setupTaskProgressTracking() error {
 			return fmt.Errorf("created progress file failed validation: %w", err)
 		}
 
-		fmt.Printf("Task progress file created successfully with %d tasks\n", len(taskStructure.TaskMap))
+		o.logger.log("Task progress file created successfully with %d tasks", len(taskStructure.TaskMap))
 	} else {
-		fmt.Printf("Task progress file already exists: %s\n", o.fileManager.GetFilePath())
+		o.logger.log("Task progress file already exists: %s", o.fileManager.GetFilePath())
 
 		// Validate existing file to ensure it's not corrupted
 		if err := o.fileManager.Validate(); err != nil {
-			fmt.Printf("Warning: Existing progress file validation failed: %v\n", err)
-			fmt.Printf("Task progress tracking will attempt to recover.\n")
+			o.logger.log("Warning: Existing progress file validation failed: %v", err)
+			o.logger.log("Task progress tracking will attempt to recover")
 			// Don't fail initialization - let the system attempt recovery
 		}
 	}
@@ -225,7 +225,7 @@ func (o *ImplementOrchestrator) processEventSafely(event events.Event) {
 	defer func() {
 		if r := recover(); r != nil {
 			// Log panic but don't crash the application
-			fmt.Printf("Warning: Panic in event processing for session %s: %v\n", o.sessionID, r)
+			o.logger.log("Warning: Panic in event processing for session %s: %v", o.sessionID, r)
 		}
 	}()
 
@@ -269,7 +269,7 @@ func (o *ImplementOrchestrator) processEventSafely(event events.Event) {
 		success := o.taskProgressBroker.PublishAsync(brokerEvent)
 		if !success {
 			// Publishing failed (likely due to buffer full or shutdown)
-			fmt.Printf("Warning: Failed to publish event to task progress broker for session %s\n", o.sessionID)
+			o.logger.log("Warning: Failed to publish event to task progress broker for session %s", o.sessionID)
 		}
 	}
 }
