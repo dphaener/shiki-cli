@@ -3,7 +3,7 @@ package agent
 import (
 	"fmt"
 
-	"github.com/dphaener/shiki-cli/internal/prompts"
+	"github.com/dphaener/shiki-cli/internal/templates"
 	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
@@ -24,15 +24,16 @@ func NewImplementAgent(session *types.WorkflowSession) *types.Agent {
 
 // buildImplementSystemPrompt creates the system prompt for implementation workflow
 func buildImplementSystemPrompt(session *types.WorkflowSession) string {
-	prompt, err := prompts.LoadImplementPrompt(prompts.ImplementPromptData{
-		FriendlyName:  session.FriendlyName,
-		FeatureNumber: session.FeatureNumber,
-		Slug:          session.Slug,
-		SpecFile:      session.SpecFile,
-		PlanFile:      session.PlanFile,
-		TasksFile:     session.TasksFile,
-		FeatureDir:    session.FeatureDir,
-	})
+	// Create template processor
+	processor := templates.NewTemplateProcessor("templates")
+
+	// Create unified phase context
+	context := templates.NewPhaseContext().
+		WithCore(session.FriendlyName, session.FeatureNumber, session.Slug, "implement").
+		WithPaths(session.SpecFile, session.PlanFile, session.TasksFile, "", "", "", session.FeatureDir, "")
+
+	// Load and process the system prompt template
+	prompt, err := processor.LoadSystemPrompt("implement", context)
 	if err != nil {
 		// Fallback to minimal prompt
 		return fmt.Sprintf("Help implement the feature: %s", session.FriendlyName)

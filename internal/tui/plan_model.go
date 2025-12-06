@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dphaener/shiki-cli/internal/events"
 	"github.com/dphaener/shiki-cli/internal/orchestrator"
+	"github.com/dphaener/shiki-cli/internal/templates"
 	"github.com/dphaener/shiki-cli/internal/tui/components"
 	"github.com/dphaener/shiki-cli/pkg/types"
 )
@@ -100,7 +101,8 @@ func NewPlanModel(session *types.PlanSession, eventBus *events.EventBus) PlanMod
 		AppendChatHistoryFunc: func(msg types.ChatMessage) {
 			session.ChatHistory = append(session.ChatHistory, msg)
 		},
-		LoadingStateLabel: "plan",
+		LoadingStateLabel:  "plan",
+		OutputTemplateName: "plan",
 	}
 
 	// Create the PhaseModel
@@ -111,6 +113,9 @@ func NewPlanModel(session *types.PlanSession, eventBus *events.EventBus) PlanMod
 
 // Init implements tea.Model
 func (m PlanModel) Init() tea.Cmd {
+	// Load template content with proper context
+	m.loadPlanTemplateContent()
+
 	return tea.Batch(
 		tea.EnterAltScreen,
 		m.PhaseModel.Init(),
@@ -265,3 +270,17 @@ const (
 	PlanChatPane    PlanPaneType = ChatPane
 	PlanPreviewPane PlanPaneType = PreviewPane
 )
+
+// loadPlanTemplateContent loads the plan output template with proper session context
+func (m *PlanModel) loadPlanTemplateContent() {
+	// Create context with session data for template variables
+	context := templates.NewPhaseContext().
+		WithCore(m.session.FriendlyName, m.session.FeatureNumber, m.session.SpecSlug, string(m.session.Phase))
+
+	// Load template content with context
+	templateContent := m.PhaseModel.LoadOutputTemplateWithContext(context)
+	if templateContent != "" {
+		// Set template content in preview
+		m.planPreview.SetContent(templateContent)
+	}
+}

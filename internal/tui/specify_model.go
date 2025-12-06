@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dphaener/shiki-cli/internal/events"
 	"github.com/dphaener/shiki-cli/internal/orchestrator"
+	"github.com/dphaener/shiki-cli/internal/templates"
 	"github.com/dphaener/shiki-cli/internal/tui/components"
 	"github.com/dphaener/shiki-cli/internal/tui/theme"
 	"github.com/dphaener/shiki-cli/pkg/types"
@@ -120,7 +121,8 @@ func NewSpecifyModel(session *types.SpecifySession, eventBus *events.EventBus) S
 		AppendChatHistoryFunc: func(msg types.ChatMessage) {
 			session.ChatHistory = append(session.ChatHistory, msg)
 		},
-		LoadingStateLabel: "specify",
+		LoadingStateLabel:     "specify",
+		OutputTemplateName:    "spec",
 	}
 
 	// Create the PhaseModel
@@ -131,6 +133,9 @@ func NewSpecifyModel(session *types.SpecifySession, eventBus *events.EventBus) S
 
 // Init implements tea.Model
 func (m SpecifyModel) Init() tea.Cmd {
+	// Load template content with proper context
+	m.loadSpecTemplateContent()
+
 	return tea.Batch(
 		tea.EnterAltScreen,
 		m.PhaseModel.Init(),
@@ -332,3 +337,18 @@ var (
 				Bold(true).
 				Padding(1)
 )
+
+// loadSpecTemplateContent loads the spec output template with proper session context
+func (m *SpecifyModel) loadSpecTemplateContent() {
+	// Create context with session data for template variables
+	context := templates.NewPhaseContext().
+		WithCore(m.session.FriendlyName, m.session.FeatureNumber, m.session.Slug, string(m.session.Phase)).
+		WithSpecifyData(m.session.FeatureDesc != "", m.session.FeatureDesc)
+
+	// Load template content with context
+	templateContent := m.PhaseModel.LoadOutputTemplateWithContext(context)
+	if templateContent != "" {
+		// Set template content in preview
+		m.specPreview.SetContent(templateContent)
+	}
+}

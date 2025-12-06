@@ -73,7 +73,11 @@ func (a *Agent) startInternal(ctx context.Context, apiKey string) error {
 		Context:                         ctx,
 		Model:                           a.Model,
 		Cwd:                             a.WorkspaceDir,
-		SystemPrompt:                    claude.SystemPromptLiteral(a.SystemPrompt),
+		SystemPrompt: claude.SystemPromptPreset{
+			Type:   "preset",
+			Preset: "claude_code",
+			Append: &a.SystemPrompt,
+		},
 		MaxTurns:                        100, // Default max turns per query
 		Env:                             env,
 		AllowedTools:                    allowedTools,

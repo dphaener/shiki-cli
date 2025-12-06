@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dphaener/shiki-cli/internal/events"
 	"github.com/dphaener/shiki-cli/internal/orchestrator"
+	"github.com/dphaener/shiki-cli/internal/templates"
 	"github.com/dphaener/shiki-cli/internal/tui/components"
 	"github.com/dphaener/shiki-cli/pkg/types"
 )
@@ -78,9 +79,10 @@ func NewImplementModel(session *types.WorkflowSession, eventBus *events.EventBus
 
 	// Create the phase model config
 	config := PhaseModelConfig{
-		PhaseType:    PhaseImplement,
-		Title:        fmt.Sprintf("Collab Implement: %s", session.FriendlyName),
-		PreviewTitle: "Implementation Progress",
+		PhaseType:          PhaseImplement,
+		Title:              fmt.Sprintf("Collab Implement: %s", session.FriendlyName),
+		PreviewTitle:       "Implementation Progress",
+		OutputTemplateName: "task-progress",
 		SubtitleFunc: func() string {
 			progressStr := ""
 			if model.totalTasks > 0 {
@@ -125,6 +127,9 @@ func NewImplementModel(session *types.WorkflowSession, eventBus *events.EventBus
 
 // Init implements tea.Model
 func (m ImplementModel) Init() tea.Cmd {
+	// Load template content first
+	m.loadImplementTemplateContent()
+
 	return tea.Batch(
 		m.PhaseModel.Init(),
 		initializeImplementAgent(m.session, m.PhaseModel.eventBus),
@@ -466,3 +471,17 @@ const (
 	ImplementChatPane    ImplementPaneType = ChatPane
 	ImplementPreviewPane ImplementPaneType = PreviewPane
 )
+
+// loadImplementTemplateContent loads the task-progress output template with proper session context
+func (m *ImplementModel) loadImplementTemplateContent() {
+	// Create context with session data for template variables
+	context := templates.NewPhaseContext().
+		WithCore(m.session.FriendlyName, m.session.FeatureNumber, m.session.Slug, string(m.session.CurrentPhase))
+
+	// Load template content with context
+	templateContent := m.PhaseModel.LoadOutputTemplateWithContext(context)
+	if templateContent != "" {
+		// Set template content in preview
+		m.implementPreview.SetContent(templateContent)
+	}
+}

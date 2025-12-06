@@ -9,6 +9,7 @@ import (
 
 	"github.com/dphaener/shiki-cli/internal/storage"
 	"github.com/dphaener/shiki-cli/internal/template"
+	"github.com/dphaener/shiki-cli/internal/templates"
 	"github.com/dphaener/shiki-cli/pkg/types"
 )
 
@@ -90,17 +91,15 @@ func extractTaskName(tmpl *template.TaskTemplate) string {
 
 // agentFromTemplate creates an Agent configuration from template
 func agentFromTemplate(tmpl *template.TaskTemplate, agentID, workspaceDir string) types.Agent {
-	var name, role, systemPrompt, model string
+	var name, role, model string
 
 	if agentID == "agent_1" {
 		name = tmpl.Agent1Name
 		role = tmpl.Agent1Role
-		systemPrompt = tmpl.Agent1SystemPrompt
 		model = tmpl.Agent1Model
 	} else {
 		name = tmpl.Agent2Name
 		role = tmpl.Agent2Role
-		systemPrompt = tmpl.Agent2SystemPrompt
 		model = tmpl.Agent2Model
 	}
 
@@ -109,11 +108,24 @@ func agentFromTemplate(tmpl *template.TaskTemplate, agentID, workspaceDir string
 		model = "claude-sonnet-4"
 	}
 
+	// Use TemplateProcessor to load base collaboration system prompt
+	// Note: The actual dynamic prompt is built in buildQuery() for each turn
+	processor := templates.NewTemplateProcessor("templates")
+	context := templates.NewPhaseContext().
+		WithCore("Collaboration Base", 0, "", "collaboration").
+		WithCollaborationData(name, role, agentID, "", 1, 10, "", "", "", "")
+
+	baseSystemPrompt, err := processor.LoadSystemPrompt("collaboration", context)
+	if err != nil {
+		// Fallback if template loading fails
+		baseSystemPrompt = fmt.Sprintf("You are %s, a %s. You will collaborate with another agent to complete tasks.", name, role)
+	}
+
 	return types.Agent{
 		ID:           agentID,
 		Name:         name,
 		Role:         role,
-		SystemPrompt: systemPrompt,
+		SystemPrompt: baseSystemPrompt,
 		Model:        model,
 		WorkspaceDir: workspaceDir,
 		MemoryFile:   fmt.Sprintf("%s_memory.md", agentID),

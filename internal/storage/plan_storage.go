@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/dphaener/shiki-cli/internal/templates"
 )
 
 // PlanSetupResult contains the result of plan setup
@@ -60,16 +62,22 @@ func SetupPlanSession(specSlug string) (*PlanSetupResult, error) {
 	}, nil
 }
 
-// LoadPlanTemplate loads the plan template from .sekkei/templates/plan-template.md
+// LoadPlanTemplate loads the plan template using the new template system
 func LoadPlanTemplate() (string, error) {
-	// Try to load from .sekkei/templates/plan-template.md
-	templatePath := filepath.Join(".sekkei", "templates", "plan-template.md")
-	if content, err := os.ReadFile(templatePath); err == nil {
-		return string(content), nil
+	// Use new template processor for plan templates
+	processor := templates.NewTemplateProcessor("templates")
+
+	// Create basic context for template processing
+	context := templates.NewPhaseContext().
+		WithCore("Template Preview", 0, "", "plan")
+
+	// Load plan output template
+	content, err := processor.LoadOutputTemplate("plan", context)
+	if err != nil {
+		return "", fmt.Errorf("load plan template: %w", err)
 	}
 
-	// Fall back to a default template
-	return defaultPlanTemplate, nil
+	return content, nil
 }
 
 // PlanExists checks if a plan.md file exists for the given spec
@@ -131,78 +139,3 @@ func ValidateSpecForPlanning(specSlug string) (*FeatureSpec, error) {
 	return spec, nil
 }
 
-// defaultPlanTemplate is the fallback plan template
-var defaultPlanTemplate = `# Implementation Plan: [Feature Name]
-
-**Created**: [YYYY-MM-DD]
-**Status**: Draft
-
-## Summary
-
-[1-2 paragraph overview of the implementation approach]
-
-## Technical Context
-
-### Current State
-
-[Describe the existing codebase and relevant components]
-
-### Proposed Solution
-
-[High-level description of the technical approach]
-
-## Implementation Phases
-
-### Phase 0: Setup & Infrastructure
-
-**Goal**: [Setup goals]
-
-**Tasks**:
-1. [Setup task]
-
-### Phase 1: Core Implementation
-
-**Goal**: [Implementation goals]
-
-**Tasks**:
-1. [Implementation task]
-
-### Phase 2: Testing & Polish
-
-**Goal**: [Testing goals]
-
-**Tasks**:
-1. [Testing task]
-
-## Key Decisions
-
-### Decision 1: [Title]
-
-**Context**: [What prompted this decision]
-**Chosen Approach**: [Selected option]
-**Rationale**: [Why]
-
-## Testing Strategy
-
-### Unit Tests
-
-[Testing approach]
-
-### Integration Tests
-
-[Integration testing approach]
-
-## Success Metrics
-
-- [ ] All requirements implemented
-- [ ] Tests passing
-- [ ] Documentation complete
-
-## Open Questions
-
-- [ ] [Question]
-
-## References
-
-- [spec.md](./spec.md) - Feature specification
-`

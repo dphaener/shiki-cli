@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dphaener/shiki-cli/internal/events"
 	"github.com/dphaener/shiki-cli/internal/orchestrator"
+	"github.com/dphaener/shiki-cli/internal/templates"
 	"github.com/dphaener/shiki-cli/internal/tui/components"
 	"github.com/dphaener/shiki-cli/internal/tui/theme"
 	"github.com/dphaener/shiki-cli/pkg/types"
@@ -59,6 +60,10 @@ type PhaseModelConfig struct {
 
 	// LoadingStateLabel is shown in the chat view while waiting for AI
 	LoadingStateLabel string
+
+	// OutputTemplateName specifies which output template to load for initial preview content
+	// Maps to templates/output-templates/{name}.md
+	OutputTemplateName string
 }
 
 // PhaseModel is a generic model for phase-based TUI workflows.
@@ -119,10 +124,19 @@ func NewPhaseModel(
 
 // Init implements tea.Model
 func (m *PhaseModel) Init() tea.Cmd {
-	return tea.Batch(
+	cmds := []tea.Cmd{
 		m.chatView.Init(),
 		m.preview.Init(),
-	)
+	}
+
+	// Load output template content for initial preview
+	if m.config.OutputTemplateName != "" {
+		if templateContent := m.loadOutputTemplate(); templateContent != "" {
+			m.preview.SetContent(templateContent)
+		}
+	}
+
+	return tea.Batch(cmds...)
 }
 
 // Update implements tea.Model
@@ -641,3 +655,46 @@ var (
 			Bold(true).
 			Padding(1)
 )
+
+// loadOutputTemplate loads and processes the output template for this phase
+func (m *PhaseModel) loadOutputTemplate() string {
+	if m.config.OutputTemplateName == "" {
+		return ""
+	}
+
+	// Create template processor
+	processor := templates.NewTemplateProcessor("templates")
+
+	// Create basic phase context (specific phases can override this with more data)
+	context := templates.NewPhaseContext().
+		WithCore("Template Preview", 0, "", string(m.config.PhaseType))
+
+	// Load and process the output template
+	content, err := processor.LoadOutputTemplate(m.config.OutputTemplateName, context)
+	if err != nil {
+		// Return placeholder content if template loading fails
+		return fmt.Sprintf("# %s Template\n\nTemplate content will appear here when the phase initializes.\n\nWaiting for template to load...", strings.Title(string(m.config.PhaseType)))
+	}
+
+	return content
+}
+
+// LoadOutputTemplateWithContext loads and processes the output template with custom context data
+// This allows phase-specific models to provide their own context
+func (m *PhaseModel) LoadOutputTemplateWithContext(context *templates.PhaseContext) string {
+	if m.config.OutputTemplateName == "" {
+		return ""
+	}
+
+	// Create template processor
+	processor := templates.NewTemplateProcessor("templates")
+
+	// Load and process the output template with provided context
+	content, err := processor.LoadOutputTemplate(m.config.OutputTemplateName, context)
+	if err != nil {
+		// Return placeholder content if template loading fails
+		return fmt.Sprintf("# %s Template\n\nTemplate content will appear here when the phase initializes.\n\nWaiting for template to load...", strings.Title(string(m.config.PhaseType)))
+	}
+
+	return content
+}
