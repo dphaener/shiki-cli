@@ -62,6 +62,14 @@ type PhaseContext struct {
 	FileContents   map[string]string
 	DirectoryList  []string
 
+	// Project discovery context
+	ProjectRoot     string
+	HasGoMod       bool
+	HasPackageJSON bool
+	MainFiles      []string
+	ConfigDirs     []string
+	TestPattern    string
+
 	// Template metadata
 	TemplateName   string
 	TemplateVars   map[string]interface{}
@@ -75,6 +83,8 @@ func NewPhaseContext() *PhaseContext {
 		FileContents: make(map[string]string),
 		TemplateVars: make(map[string]interface{}),
 		CustomData:   make(map[string]interface{}),
+		MainFiles:    make([]string, 0),
+		ConfigDirs:   make([]string, 0),
 	}
 	ctx.WithTimestamps()
 	return ctx
